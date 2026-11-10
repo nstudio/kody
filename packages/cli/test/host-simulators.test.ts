@@ -61,6 +61,7 @@ function setup(
 		simulators?: boolean
 		tools?: Partial<SimulatorTools>
 		exec?: (call: ExecCall) => Awaited<ReturnType<SimulatorExec>> | undefined
+		probeSimDeck?: (port: number) => Promise<number | null>
 	} = {},
 ) {
 	const hostCommands = new HostCommands({
@@ -87,6 +88,7 @@ function setup(
 			spawned.push({ file, args: [...args] })
 		},
 		sleep: async () => {},
+		probeSimDeck: options.probeSimDeck ?? (async () => null),
 	})
 	const authorized: Array<Authorized> = []
 	const run: HostCommandRunContext = {
@@ -626,35 +628,45 @@ test('describe and stream need SimDeck; stream never returns its access token', 
 	)
 })
 
-test('stream can start SimDeck and select an iOS device', async () => {
-	const ctx = setup({
-		exec: ({ args }) =>
-			args.length === 1 || args.length === 0
-				? result('SimDeck is running\nLocal: http://127.0.0.1:4310')
-				: result(
-						JSON.stringify({
-							running: true,
-							service: { httpUrl: 'http://127.0.0.1:4310/' },
-						}),
-					),
-	})
-	const udid = '8F1C1C2E-1111-2222-3333-444455556666'
+test('stream reuses a healthy SimDeck and only starts it in the background', async () => {
+	const healthy = setup({ probeSimDeck: async () => 4310 })
 	assert.deepEqual(
-		await ctx.simulators.call('stream', { start: true, id: udid }, ctx.run),
+		await healthy.simulators.call('stream', { start: true }, healthy.run),
 		{ url: 'http://127.0.0.1:4310', running: true },
 	)
-	assert.deepEqual(ctx.calls[0].args, [udid])
+	assert.deepEqual(healthy.calls, [])
 	assert.equal(
-		(ctx.authorized[0] as { command: string }).command,
-		`kody.simulator.stream start ${udid}`,
+		(healthy.authorized[0] as { command: string }).command,
+		'kody.simulator.stream start',
 	)
-	await assert.rejects(
-		ctx.simulators.call(
-			'stream',
-			{ start: true, id: '--bind=0.0.0.0' },
-			ctx.run,
-		),
-		/invalid_request/,
+
+	let up = false
+	const cold = setup({
+		probeSimDeck: async () => (up ? 4312 : null),
+		exec: ({ args }) => {
+			if (args.join(' ') === 'service start')
+				return result('', {
+					exitCode: 2,
+					stderr: "unrecognized subcommand 'start'",
+				})
+			if (args.join(' ') === 'daemon start') {
+				up = true
+				return result('started')
+			}
+			return result(JSON.stringify({ running: false }))
+		},
+	})
+	assert.deepEqual(
+		await cold.simulators.call('stream', { start: true }, cold.run),
+		{ url: 'http://127.0.0.1:4312', running: true },
+	)
+	assert.deepEqual(
+		cold.calls.map((c) => c.args.join(' ')),
+		['service start', 'daemon start'],
+	)
+	assert.ok(
+		cold.calls.every((c) => !c.args.some((a) => /^[0-9A-F-]{36}$/i.test(a))),
+		'never passes a device to bare simdeck',
 	)
 })
 

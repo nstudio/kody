@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { constants } from 'node:fs'
+import { constants, readFileSync } from 'node:fs'
 import { access, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
@@ -455,6 +455,8 @@ export type HostSimulatorsOptions = {
 	spawnDetached?: (file: string, args: ReadonlyArray<string>) => void
 	resolveTools?: () => Promise<SimulatorTools>
 	sleep?: (ms: number, signal: AbortSignal) => Promise<void>
+	/** Asks a SimDeck service on a loopback port whether it is up; resolves its HTTP port, or null. */
+	probeSimDeck?: (port: number, signal: AbortSignal) => Promise<number | null>
 	/** The audited `cwd` of every action; defaults to the home folder. */
 	cwd?: string
 }
@@ -466,6 +468,7 @@ export class HostSimulators {
 	readonly #spawnDetached: NonNullable<HostSimulatorsOptions['spawnDetached']>
 	readonly #resolveTools: () => Promise<SimulatorTools>
 	readonly #sleep: NonNullable<HostSimulatorsOptions['sleep']>
+	readonly #probeSimDeck: NonNullable<HostSimulatorsOptions['probeSimDeck']>
 	readonly #cwd: string
 
 	constructor(options: HostSimulatorsOptions) {
@@ -476,6 +479,7 @@ export class HostSimulators {
 		this.#resolveTools = options.resolveTools ?? (() => resolveSimulatorTools())
 		this.#sleep =
 			options.sleep ?? ((ms, signal) => delay(ms, undefined, { signal }))
+		this.#probeSimDeck = options.probeSimDeck ?? probeSimDeckHealth
 		this.#cwd = options.cwd ?? homedir()
 	}
 
@@ -557,14 +561,9 @@ export class HostSimulators {
 		if (name === 'stream') {
 			const simdeck = requireSimDeck(tools)
 			const start = input.start === true
-			// SimDeck selects a device by UDID or name; only iOS UDIDs are passed so the argument stays a fixed shape.
-			const select =
-				start && input.id !== undefined && input.id !== null
-					? deviceIdArg('ios', input.id)
-					: null
 			return {
-				command: `${action}${start ? ' start' : ''}${select ? ` ${select}` : ''}`,
-				execute: (signal) => this.#stream(simdeck, signal, { start, select }),
+				command: `${action}${start ? ' start' : ''}`,
+				execute: (signal) => this.#stream(simdeck, signal, start),
 			}
 		}
 		const platform = platformArg(input.platform)
@@ -1177,22 +1176,38 @@ export class HostSimulators {
 		}
 	}
 
-	async #stream(
-		simdeck: string,
-		signal: AbortSignal,
-		options: { start?: boolean; select?: string | null } = {},
-	) {
-		if (options.start) {
-			// Bare `simdeck [<udid>]` starts or reuses the background service and selects the device in its UI.
+	async #stream(simdeck: string, signal: AbortSignal, start: boolean) {
+		const healthy = await this.#healthyUrl(signal)
+		if (healthy) return { url: healthy, running: true }
+		if (!start) return await this.#streamStatus(simdeck, signal)
+		// Bare `simdeck <device>` stays in the foreground on 0.1.x and can bind every interface, so only the
+		// background-service forms are used: `service start` (0.2+) or `daemon start` (0.1.x).
+		for (const args of [
+			['service', 'start'],
+			['daemon', 'start'],
+		]) {
 			const started = await this.#run(
 				simdeck,
-				options.select && options.select !== 'booted' ? [options.select] : [],
-				{ timeoutMs: timeouts.status * 4, maxBytes: 256 * 1024 },
+				args,
+				{ timeoutMs: timeouts.status * 3, maxBytes: 256 * 1024 },
 				'stream',
 			)(signal)
-			if (started.exitCode !== 0) failed('stream', started)
+			if (started.exitCode !== 0) continue
+			for (let i = 0; i < 20; i++) {
+				const url = await this.#healthyUrl(signal)
+				if (url) return { url, running: true }
+				await this.#sleep(500, signal)
+			}
 		}
 		return await this.#streamStatus(simdeck, signal)
+	}
+
+	async #healthyUrl(signal: AbortSignal) {
+		for (const port of simDeckPorts()) {
+			const live = await this.#probeSimDeck(port, signal).catch(() => null)
+			if (live) return `http://127.0.0.1:${live}`
+		}
+		return null
 	}
 
 	async #streamStatus(simdeck: string, signal: AbortSignal) {
@@ -1224,6 +1239,40 @@ export class HostSimulators {
 		}
 		return { url: defaultSimDeckUrl, running: false }
 	}
+}
+
+/** The configured service port (~/.simdeck/config.json) first, then SimDeck's default. */
+function simDeckPorts(home: string = homedir()): Array<number> {
+	const ports: Array<number> = []
+	try {
+		const configured = JSON.parse(
+			readFileSync(join(home, '.simdeck', 'config.json'), 'utf8'),
+		)?.service?.port
+		if (
+			Number.isSafeInteger(configured) &&
+			configured > 0 &&
+			configured < 65536
+		)
+			ports.push(configured)
+	} catch {}
+	if (!ports.includes(4310)) ports.push(4310)
+	return ports
+}
+
+async function probeSimDeckHealth(
+	port: number,
+	signal: AbortSignal,
+): Promise<number | null> {
+	const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
+		signal: AbortSignal.any([signal, AbortSignal.timeout(2000)]),
+	})
+	if (!response.ok) return null
+	const body = (await response.json().catch(() => null)) as {
+		ok?: unknown
+		httpPort?: unknown
+	} | null
+	if (body?.ok !== true) return null
+	return typeof body.httpPort === 'number' ? body.httpPort : port
 }
 
 /** Only the origin: SimDeck's metadata also carries an access token that must not leave the daemon. */

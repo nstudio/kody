@@ -266,18 +266,18 @@ checked (simulator UDIDs or `booted`, adb serials, AVD names, bundle ids, http,
 https, or app URL schemes, absolute `.app` or `.apk` paths) and the tools run
 without a shell.
 
-| Action                                            | Runs                                                                                          | Returns                                                                               |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `list()`                                          | `xcrun simctl list devices available`, `adb devices -l`, `emulator -list-avds`                | `{ ios: { available, devices }, android: { adb, emulator, devices, avds }, simdeck }` |
-| `boot({ platform, id, timeoutMs? })`              | `simctl boot`; Android: starts the AVD `id` and waits (default 60 s) for adb to see it booted | `{ booted, alreadyBooted, serial?, timedOut? }`                                       |
-| `shutdown({ platform, id })`                      | `simctl shutdown`; `adb -s <serial> emu kill` (`id` is a serial or a running AVD's name)      | `{ shutdown, alreadyShutdown }`                                                       |
-| `install({ platform, id, appPath })`              | `simctl install`; `adb install -r`                                                            | `{ installed }`                                                                       |
-| `launch({ platform, id, appId })`                 | `simctl launch`; `adb shell monkey -p <appId>`                                                | `{ launched, pid }`                                                                   |
-| `terminate({ platform, id, appId })`              | `simctl terminate`; `adb shell am force-stop`                                                 | `{ terminated }`                                                                      |
-| `openUrl({ platform, id, url })`                  | `simctl openurl`; `adb shell am start -a android.intent.action.VIEW -d`                       | `{ opened }`                                                                          |
-| `screenshot({ platform, id })`                    | `simctl io … screenshot`; `adb exec-out screencap -p`                                         | `{ mimeType, base64, bytes, width, height }`, at most 8 MB                            |
-| `describe({ platform, id?, source?, maxDepth? })` | `simdeck describe --format agent`                                                             | `{ source, text, truncated }`, at most 256 KB                                         |
-| `stream()`                                        | `simdeck service status`                                                                      | `{ url, running }` (default `http://127.0.0.1:4310`)                                  |
+| Action                                            | Runs                                                                                                  | Returns                                                                               |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `list()`                                          | `xcrun simctl list devices available`, `adb devices -l`, `emulator -list-avds`                        | `{ ios: { available, devices }, android: { adb, emulator, devices, avds }, simdeck }` |
+| `boot({ platform, id, timeoutMs? })`              | `simctl boot`; Android: starts the AVD `id` and waits (default 60 s) for adb to see it booted         | `{ booted, alreadyBooted, serial?, timedOut? }`                                       |
+| `shutdown({ platform, id })`                      | `simctl shutdown`; `adb -s <serial> emu kill` (`id` is a serial or a running AVD's name)              | `{ shutdown, alreadyShutdown }`                                                       |
+| `install({ platform, id, appPath })`              | `simctl install`; `adb install -r`                                                                    | `{ installed }`                                                                       |
+| `launch({ platform, id, appId })`                 | `simctl launch`; `adb shell monkey -p <appId>`                                                        | `{ launched, pid }`                                                                   |
+| `terminate({ platform, id, appId })`              | `simctl terminate`; `adb shell am force-stop`                                                         | `{ terminated }`                                                                      |
+| `openUrl({ platform, id, url })`                  | `simctl openurl`; `adb shell am start -a android.intent.action.VIEW -d`                               | `{ opened }`                                                                          |
+| `screenshot({ platform, id })`                    | `simctl io … screenshot`; `adb exec-out screencap -p`                                                 | `{ mimeType, base64, bytes, width, height }`, at most 8 MB                            |
+| `describe({ platform, id?, source?, maxDepth? })` | `simdeck describe --format agent`                                                                     | `{ source, text, truncated }`, at most 256 KB                                         |
+| `stream({ start? })`                              | SimDeck `/api/health`; with `start`, `simdeck service start` (0.2+) or `simdeck daemon start` (0.1.x) | `{ url, running }` (default `http://127.0.0.1:4310`)                                  |
 
 On iOS `id` is a UDID; on Android it is an adb serial such as `emulator-5554`,
 except `boot`, which takes an AVD name. `describe` and `stream` need
