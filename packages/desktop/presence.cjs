@@ -7,6 +7,7 @@ const {
 } = require('node:fs')
 const { join } = require('node:path')
 const { createTrayIcon } = require('./tray-icon.cjs')
+const edition = require('./edition.cjs')
 
 class DesktopPresence {
 	constructor({ app, dialog, show, windows, changed }) {
@@ -29,7 +30,9 @@ class DesktopPresence {
 			this.chosen = false
 		}
 		this.tray = new Tray(createTrayIcon(nativeImage, nativeTheme))
-		this.tray.setToolTip('Kody')
+		this.tray.setToolTip(edition.name)
+		if (edition.distinct && process.platform === 'darwin')
+			this.tray.setTitle(edition.name)
 		this.tray.on('double-click', () => void this.show())
 		this.themeListener = () => {
 			if (!this.tray) return
@@ -77,10 +80,10 @@ class DesktopPresence {
 		// Keep the tray available before removing the app's other entry point.
 		this.tray.setContextMenu(
 			Menu.buildFromTemplate([
-				{ label: 'Open Kody', click: () => void this.show() },
+				{ label: `Open ${edition.name}`, click: () => void this.show() },
 				...this.menuItems(),
 				{ type: 'separator' },
-				{ label: 'Quit Kody', click: () => this.app.quit() },
+				{ label: `Quit ${edition.name}`, click: () => this.app.quit() },
 			]),
 		)
 		for (const window of this.windows()) this.applyWindow(window)
@@ -94,8 +97,8 @@ class DesktopPresence {
 		const launcher = process.platform === 'darwin' ? 'Dock' : 'taskbar'
 		const { response } = await this.dialog.showMessageBox({
 			type: 'question',
-			message: 'Keep Kody running in the background?',
-			detail: `Keep local execution running with the window closed and the ${launcher} icon hidden. Open Kody, change this setting, or quit from the ${location}. Your computer must stay awake.`,
+			message: `Keep ${edition.name} running in the background?`,
+			detail: `Keep local execution running with the window closed and the ${launcher} icon hidden. Open ${edition.name}, change this setting, or quit from the ${location}. Your computer must stay awake.`,
 			buttons: ['Run in background', 'Keep in ' + launcher],
 			defaultId: 0,
 			cancelId: 1,

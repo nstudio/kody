@@ -41,9 +41,10 @@ const {
 	openInBrowser,
 } = require('./app-links.cjs')
 
+const edition = require('./edition.cjs')
 // The name decides the single-instance lock and the userData folder, so a build with its own productName runs beside
 // the published app instead of handing off to it.
-app.setName(require('./package.json').productName || 'Kody')
+app.setName(edition.name)
 let appOrigin = productionOrigin
 const developmentUrl = process.argv
 	.find((arg) => arg.startsWith('--app-url='))
@@ -588,7 +589,7 @@ async function createWindow(path = '/account') {
 		height: 860,
 		minWidth: 720,
 		minHeight: 480,
-		title: 'Kody',
+		title: edition.name,
 		icon: join(__dirname, 'assets/icon.png'),
 		...(integratedTitlebar
 			? { titleBarStyle: 'hidden', trafficLightPosition: { x: 16, y: 13 } }
@@ -614,6 +615,7 @@ async function createWindow(path = '/account') {
 		integratedTitlebar,
 	})
 	presence.applyWindow(window)
+	edition.brandWindow(window)
 	const record = { navigation, failedLoadUrl: undefined }
 	windows.set(window, record)
 	lastWindow = window
