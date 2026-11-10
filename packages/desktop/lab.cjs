@@ -83,6 +83,7 @@ class Lab {
 		setInterval(() => void this.poll(false), POLL_MS).unref()
 		setInterval(() => void this.pollApprovals(false), APPROVALS_POLL_MS).unref()
 		void this.readSimulators()
+		this.quick = this.createQuick()
 	}
 
 	saveSettings() {
@@ -318,7 +319,10 @@ class Lab {
 			},
 		})
 		window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-		window.on('blur', () => this.hideQuick())
+		// Becoming key without activating can report a transient blur while the panel orders front.
+		window.on('blur', () => {
+			if (Date.now() - (this.quickShownAt ?? 0) > 400) this.hideQuick()
+		})
 		window.webContents.on('will-navigate', (event) => event.preventDefault())
 		window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 		void window.loadFile(join(__dirname, 'quick-panel.html'))
@@ -338,6 +342,7 @@ class Lab {
 			await new Promise((resolve) =>
 				this.quick.webContents.once('did-finish-load', resolve),
 			)
+		this.quickShownAt = Date.now()
 		native.showWithoutActivating(this.quick)
 		this.quick.webContents.send('lab:quick-show', {})
 	}
