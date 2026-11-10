@@ -50,17 +50,19 @@ once macOS is solid.
 
 ## Phases
 
-0. Fork, install, prototype, baseline `npm run desktop:dev`. _(prototype done)_
-1. Notifications (2) — smallest, no new runtime.
-2. NativeScript loader + quick panel (1): lazy runtime load, panel helper,
-   desktop-owned panel page and bridge, search/approvals/machine actions via the
-   bundled CLI.
-3. Simulators capability (3): CLI namespace, local opt-in, desktop toggle,
-   dashboard runner switch.
-4. Review panel (4): dashboard review view + review endpoint, desktop panel,
-   shortcut and quick-panel entry.
-5. Local packaged build with its own app id and data directory so it runs beside
-   the installed Kody; demo script and video.
+0. Fork, install, prototype, baseline `npm run desktop:dev`. _Done._
+1. Notifications (2). _Done: approval-needed, new critical, CI failing, toolbox
+   run state; click opens the review panel._
+2. NativeScript loader and quick panel (1). _Done: ⌥Space over any app, PR
+   search and dashboard views._
+3. Simulators capability (3). _Done in the CLI (`kody.simulator.*`,
+   `kody context simulators`), Lab › Allow simulators, dashboard runner boots
+   devices and takes screenshot and view-tree captures._
+4. Review panel (4). _Done: ⌥⇧R / ⌘↩ from the quick panel, checklist, drafts,
+   GitHub review, workflow approval, toolbox run, captures._
+5. Packaged `Kody Lab.app` (own app id, data folder, no auto-update). _Done
+   (`npm run desktop:pack`, unsigned)._ Remaining: end-to-end toolbox run and
+   captures on a PR, then record the demo (`demo-script.md`).
 6. Windows and Linux fallbacks.
 
 ## Out of scope until maintainers respond
