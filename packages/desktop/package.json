@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@kodycodes/cli": "file:../cli",
+    "@nativescript/macos-node-api": "0.5.0-beta.0",
     "electron-updater": "^6.8.11",
     "set-cookie-parser": "^3.1.2",
     "xstate": "6.0.0-beta.1"
@@ -41,6 +42,7 @@
     },
     "files": [
       "*.cjs",
+      "quick-panel.html",
       "package.json",
       "assets/icon.png",
       "assets/tray-*.png",

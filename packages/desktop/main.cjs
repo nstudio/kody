@@ -42,6 +42,8 @@ const {
 } = require('./app-links.cjs')
 
 const edition = require('./edition.cjs')
+const { Lab } = require('./lab.cjs')
+let lab = null
 // The name decides the single-instance lock and the userData folder, so a build with its own productName runs beside
 // the published app instead of handing off to it.
 app.setName(edition.name)
@@ -453,6 +455,7 @@ function updateMenu() {
 					},
 				],
 			},
+			...(lab ? [lab.menu()] : []),
 			...(state.ecid
 				? [
 						{
@@ -756,14 +759,25 @@ else {
 		.then(async () => {
 			if (process.platform === 'darwin')
 				app.dock.setIcon(join(__dirname, 'assets/icon.png'))
-			updates = startUpdates({
-				app,
-				updater: require('electron-updater').autoUpdater,
-				dialog,
-				changed: updateMenu,
-			})
+			// A side-by-side build must never install the published app over itself.
+			updates = edition.distinct
+				? null
+				: startUpdates({
+						app,
+						updater: require('electron-updater').autoUpdater,
+						dialog,
+						changed: updateMenu,
+					})
 			loadState()
 			presence.start()
+			if (edition.distinct) {
+				lab = new Lab({
+					app,
+					showApp: (path) => showApp(path),
+					onChange: updateMenu,
+				})
+				await lab.start()
+			}
 			updateMenu()
 			const [launchLink, ...moreLinks] = appLinks.start()
 			await showApp(launchLink)

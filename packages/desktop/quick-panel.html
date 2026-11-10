@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:" />
+		<title>Kody quick panel</title>
+		<style>
+			:root { color-scheme: dark; font: 14px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+			html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+			.shell { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; border-radius: 16px; background: rgba(22, 26, 34, 0.94); border: 1px solid rgba(255, 255, 255, 0.09); color: #e8edf4; overflow: hidden; }
+			.bar { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+			.mark { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(140deg, #65adf1, #3a53ff); font-weight: 800; font-size: 13px; color: #fff; flex: none; }
+			input { flex: 1; font: 22px/1.3 inherit; font-family: inherit; color: #fff; background: transparent; border: 0; outline: 0; }
+			input::placeholder { color: rgba(255, 255, 255, 0.38); }
+			.hint { color: rgba(255, 255, 255, 0.38); font-size: 12px; white-space: nowrap; }
+			ul { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; }
+			li { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 9px; cursor: default; }
+			li.on { background: rgba(101, 173, 241, 0.18); }
+			.icon { width: 22px; text-align: center; flex: none; font-size: 15px; }
+			.text { min-width: 0; flex: 1; }
+			.title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.sub { color: rgba(255, 255, 255, 0.5); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: #c9d4e3; white-space: nowrap; }
+			.tag.amber { background: rgba(242, 184, 75, 0.18); color: #f2b84b; }
+			.tag.red { background: rgba(255, 123, 114, 0.16); color: #ff7b72; }
+			.tag.purple { background: rgba(194, 155, 255, 0.16); color: #c29bff; }
+			.tag.green { background: rgba(79, 207, 139, 0.16); color: #4fcf8b; }
+			.empty, .status { padding: 14px 18px; color: rgba(255, 255, 255, 0.5); font-size: 13px; }
+			.status { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 8px 18px; font-size: 11.5px; display: flex; justify-content: space-between; }
+		</style>
+	</head>
+	<body>
+		<div class="shell">
+			<div class="bar">
+				<div class="mark">K</div>
+				<input id="q" autocomplete="off" spellcheck="false" placeholder="Search PRs, #number, or a command" />
+				<span class="hint">↩ open · ⌘↩ review · esc</span>
+			</div>
+			<ul id="results" role="listbox"></ul>
+			<div class="status"><span id="left"></span><span id="right"></span></div>
+		</div>
+		<script>
+			const q = document.getElementById('q')
+			const list = document.getElementById('results')
+			let items = []
+			let active = 0
+			let seq = 0
+
+			function render() {
+				list.replaceChildren()
+				if (!items.length) {
+					const li = document.createElement('div')
+					li.className = 'empty'
+					li.textContent = 'Nothing matches.'
+					list.append(li)
+					return
+				}
+				items.forEach((item, i) => {
+					const li = document.createElement('li')
+					li.className = i === active ? 'on' : ''
+					li.setAttribute('role', 'option')
+					const icon = Object.assign(document.createElement('span'), { className: 'icon', textContent: item.icon || '•' })
+					const text = Object.assign(document.createElement('div'), { className: 'text' })
+					text.append(Object.assign(document.createElement('div'), { className: 'title', textContent: item.title }))
+					if (item.subtitle) text.append(Object.assign(document.createElement('div'), { className: 'sub', textContent: item.subtitle }))
+					li.append(icon, text)
+					for (const tag of item.tags || []) li.append(Object.assign(document.createElement('span'), { className: `tag ${tag.tone || ''}`, textContent: tag.text }))
+					li.addEventListener('mousemove', () => { if (active !== i) { active = i; render() } })
+					li.addEventListener('click', () => run(item.id))
+					list.append(li)
+				})
+				list.children[active]?.scrollIntoView({ block: 'nearest' })
+			}
+
+			async function search() {
+				const mine = ++seq
+				const result = await window.labQuick.query(q.value)
+				if (mine !== seq) return
+				items = result.items
+				active = 0
+				document.getElementById('left').textContent = result.status || ''
+				document.getElementById('right').textContent = result.frontmost ? `typing over ${result.frontmost}` : ''
+				render()
+			}
+
+			async function run(id) {
+				await window.labQuick.run(id)
+			}
+
+			q.addEventListener('input', search)
+			document.addEventListener('keydown', (event) => {
+				if (event.key === 'Escape') { event.preventDefault(); window.labQuick.hide() }
+				else if (event.key === 'ArrowDown') { event.preventDefault(); active = Math.min(items.length - 1, active + 1); render() }
+				else if (event.key === 'ArrowUp') { event.preventDefault(); active = Math.max(0, active - 1); render() }
+				else if (event.key === 'Enter' && items[active]) {
+					event.preventDefault()
+					const item = items[active]
+					run((event.metaKey || event.ctrlKey) && item.reviewId ? item.reviewId : item.id)
+				}
+			})
+			window.labQuick.onShow(() => { q.value = ''; q.focus(); search() })
+			search()
+		</script>
+	</body>
+</html>
