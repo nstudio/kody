@@ -126,16 +126,7 @@ class Lab {
 					},
 				},
 				{ type: 'separator' },
-				{
-					label: 'Allow simulators',
-					type: 'checkbox',
-					enabled: this.simulators !== null,
-					checked: this.simulators?.enabled === true,
-					click: (item) => void this.setSimulators(item.checked),
-				},
-				...(this.simulators?.enabled && !this.simulators.commands
-					? [{ label: 'Simulators also need Allow commands', enabled: false }]
-					: []),
+				...this.simulatorMenuItems(),
 				{ type: 'separator' },
 				{
 					label: this.nativeReady
@@ -145,6 +136,22 @@ class Lab {
 				},
 			],
 		}
+	}
+
+	/** Shared by the Lab and Machine menus: simulator control is a permission of this machine. */
+	simulatorMenuItems() {
+		return [
+			{
+				label: 'Allow simulators',
+				type: 'checkbox',
+				enabled: this.simulators !== null,
+				checked: this.simulators?.enabled === true,
+				click: (item) => void this.setSimulators(item.checked),
+			},
+			...(this.simulators?.enabled && !this.simulators.commands
+				? [{ label: 'Simulators also need Allow commands', enabled: false }]
+				: []),
+		]
 	}
 
 	// ---- Data -----------------------------------------------------------------------------------------------------

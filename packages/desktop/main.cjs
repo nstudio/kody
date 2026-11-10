@@ -465,6 +465,7 @@ function updateMenu() {
 									label: 'This machine',
 									click: () => void showApp(machinePath()),
 								},
+								...(lab ? lab.simulatorMenuItems() : []),
 								{ type: 'separator' },
 								{
 									label: 'Pause routing in Kody…',
