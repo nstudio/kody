@@ -775,3 +775,16 @@ test('kody context simulators on, off, and status write the local policy', async
 		}
 	}
 })
+
+test('package-bound kody in an older origin shim passes kody.simulator through as a namespace', async () => {
+	const { passContextNamespaces } =
+		await import('../src/local-package-graph.ts')
+	const shim =
+		'get(_t, property) {\n\t\t\tif (property === "mcp" || property === "command") return kody[property];\n\t\t}'
+	assert.match(
+		passContextNamespaces(shim),
+		/property === "command" \|\| property === "simulator"\) return kody\[property\]/,
+	)
+	const current = passContextNamespaces(shim)
+	assert.equal(passContextNamespaces(current), current)
+})

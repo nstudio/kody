@@ -519,6 +519,22 @@ export function hasVisitorCredential(request, key) {
 	return `${esModule.trimEnd()}\n${sharedHelpers}`
 }
 
+const contextNamespacesGuard =
+	'if (property === "mcp" || property === "command") return kody[property];'
+
+/**
+ * The origin shim's package-bound `kody` passes `mcp` and `command` through as
+ * namespaces and turns every other property into a single call, so
+ * `kody.simulator.list()` would lose `.list`. Shims served before the origin
+ * also passes `simulator` get it added here.
+ */
+export function passContextNamespaces(source: string): string {
+	return source.replace(
+		contextNamespacesGuard,
+		'if (property === "mcp" || property === "command" || property === "simulator") return kody[property];',
+	)
+}
+
 export async function writePackageModuleFiles(
 	workDir: string,
 	graph: LocalPackageGraph,
@@ -530,7 +546,9 @@ export async function writePackageModuleFiles(
 		const file = `pkg-${index}.js`
 		const source =
 			module.name === localExecuteGatewayFetchShimModuleName
-				? backfillLocalExecuteRuntimeShimSharedExports(module.esModule)
+				? passContextNamespaces(
+						backfillLocalExecuteRuntimeShimSharedExports(module.esModule),
+					)
 				: module.esModule
 		await writeFile(joinPath(workDir, file), source)
 		written.push({ name: module.name, file })
