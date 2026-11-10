@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('labQuick', {
 	run: (id) =>
 		ipcRenderer.invoke('lab:quick', 'run', String(id ?? '').slice(0, 200)),
 	hide: () => ipcRenderer.invoke('lab:quick', 'hide'),
+	onRefresh: (callback) => {
+		const listener = () => callback()
+		ipcRenderer.on('lab:quick-refresh', listener)
+		return () => ipcRenderer.removeListener('lab:quick-refresh', listener)
+	},
 	onShow: (callback) => {
 		const listener = (_event, state) => callback(state)
 		ipcRenderer.on('lab:quick-show', listener)

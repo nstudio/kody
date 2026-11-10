@@ -51,7 +51,7 @@
 				if (!items.length) {
 					const li = document.createElement('div')
 					li.className = 'empty'
-					li.textContent = 'Nothing matches.'
+					li.textContent = document.getElementById('left').textContent.startsWith('Signing in') ? 'Loading pull requests…' : 'Nothing matches.'
 					list.append(li)
 					return
 				}
@@ -99,6 +99,7 @@
 				}
 			})
 			window.labQuick.onShow(() => { q.value = ''; q.focus(); search() })
+			window.labQuick.onRefresh(() => search())
 			search()
 		</script>
 	</body>

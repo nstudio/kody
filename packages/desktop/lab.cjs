@@ -195,13 +195,22 @@ class Lab {
 			this.onChange?.()
 		} catch (error) {
 			this.summaryError = error.message
+			console.warn(`Lab: dashboard summary failed: ${error.message}`)
 		}
 	}
 
-	async freshSummary() {
-		if (!this.summary || Date.now() - this.summaryAt > 60_000)
-			await this.poll(!this.summary)
-		return this.summary
+	/** Refresh in the background when stale; the quick panel is told to re-query when new data lands. */
+	refreshSummarySoon() {
+		if (
+			this.refreshing ||
+			(this.summary && Date.now() - this.summaryAt <= 60_000)
+		)
+			return
+		this.refreshing = this.poll(!this.summary).finally(() => {
+			this.refreshing = null
+			if (this.quick && !this.quick.isDestroyed() && this.quick.isVisible())
+				this.quick.webContents.send('lab:quick-refresh')
+		})
 	}
 
 	/** Pending Kody approvals in the dashboard's org and the account's active org, through the bundled CLI login. */
@@ -300,8 +309,9 @@ class Lab {
 
 	// ---- Quick panel ----------------------------------------------------------------------------------------------
 
-	async results(text) {
-		const summary = await this.freshSummary().catch(() => null)
+	results(text) {
+		this.refreshSummarySoon()
+		const summary = this.summary
 		const frontmost = native.frontmostApp()
 		const synced = summary?.fetchedAt
 			? new Date(summary.fetchedAt).toLocaleTimeString([], {
@@ -313,7 +323,9 @@ class Lab {
 			items: quickResults(summary, text, this.approvals ?? []),
 			status: summary
 				? `${summary.prs.length} open PRs · synced ${synced}`
-				: this.summaryError || 'Loading PRs…',
+				: this.summaryError
+					? `Dashboard unavailable: ${this.summaryError}`
+					: 'Signing in to the dashboard…',
 			frontmost:
 				frontmost && frontmost.pid !== process.pid ? frontmost.name : null,
 		}
