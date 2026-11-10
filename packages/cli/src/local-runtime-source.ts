@@ -260,10 +260,33 @@ function __kodyNamespace(path) {
 			) {
 				return gatewayFetchStream;
 			}
+			if (path.length === 1 && path[0] === 'kody' && __kodyObjectNamespaces.has(property)) {
+				return __kodyObjectNamespace([...path, property]);
+			}
 			return __kodyNamespace([...path, property]);
 		},
 		apply(_target, _thisArg, args) {
 			return __kodyCall(path, args);
+		},
+	});
+}
+
+// Package code reaches kody through a server-side shim that wraps function-valued properties as single calls,
+// which drops nested members; these namespaces are never called directly, so they are plain objects.
+const __kodyObjectNamespaces = new Set(['command', 'simulator']);
+
+function __kodyObjectNamespace(path) {
+	const label = '[KodyRuntime:' + path.join('.') + ']';
+	return new Proxy({}, {
+		get(_target, property) {
+			if (typeof property === 'symbol' || property === 'then' || property === 'toJSON') {
+				return undefined;
+			}
+			if (property === 'toString' || property === 'inspect') return () => label;
+			return __kodyNamespace([...path, property]);
+		},
+		has() {
+			return true;
 		},
 	});
 }
