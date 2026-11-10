@@ -1,6 +1,7 @@
 {
   "name": "@kodycodes/desktop",
   "version": "0.1.5",
+  "productName": "Kody Lab",
   "private": true,
   "description": "Kody desktop shell and local execution runner",
   "main": "main.cjs",
@@ -31,8 +32,8 @@
     "yaml": "^2.9.0"
   },
   "build": {
-    "appId": "codes.kody.desktop",
-    "productName": "Kody",
+    "appId": "codes.kody.desktop.lab",
+    "productName": "Kody Lab",
     "asar": false,
     "npmRebuild": false,
     "directories": {

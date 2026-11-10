@@ -41,7 +41,9 @@ const {
 	openInBrowser,
 } = require('./app-links.cjs')
 
-app.setName('Kody')
+// The name decides the single-instance lock and the userData folder, so a build with its own productName runs beside
+// the published app instead of handing off to it.
+app.setName(require('./package.json').productName || 'Kody')
 let appOrigin = productionOrigin
 const developmentUrl = process.argv
 	.find((arg) => arg.startsWith('--app-url='))
