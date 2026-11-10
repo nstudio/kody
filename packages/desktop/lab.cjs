@@ -138,6 +138,26 @@ class Lab {
 		}
 	}
 
+	trayMenuItems() {
+		return [
+			{
+				label: 'Quick panel',
+				accelerator: this.shortcuts.quick,
+				click: () => void this.toggleQuick(),
+			},
+			{
+				label: this.lastReview
+					? `Review panel (#${this.lastReview})`
+					: 'Review panel',
+				accelerator: this.shortcuts.review,
+				click: () => void this.toggleReview(),
+			},
+			{ label: 'NativeScript PRs', click: () => void this.openDashboard('/') },
+			{ type: 'separator' },
+			...this.simulatorMenuItems(),
+		]
+	}
+
 	/** Shared by the Lab and Machine menus: simulator control is a permission of this machine. */
 	simulatorMenuItems() {
 		return [

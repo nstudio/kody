@@ -10,8 +10,8 @@ const { createTrayIcon } = require('./tray-icon.cjs')
 const edition = require('./edition.cjs')
 
 class DesktopPresence {
-	constructor({ app, dialog, show, windows, changed }) {
-		Object.assign(this, { app, dialog, show, windows, changed })
+	constructor({ app, dialog, show, windows, changed, extraItems }) {
+		Object.assign(this, { app, dialog, show, windows, changed, extraItems })
 		this.background = false
 		this.chosen = false
 	}
@@ -73,14 +73,26 @@ class DesktopPresence {
 			)
 		}
 	}
+	// In background mode the tray is the only entry point on macOS (no Dock icon or menu bar).
+	extraMenuItems() {
+		const items = this.extraItems?.() ?? []
+		return items.length
+			? [{ type: 'separator' }, ...items, { type: 'separator' }]
+			: []
+	}
 	applyWindow(window) {
 		if (process.platform === 'win32') window.setSkipTaskbar(this.background)
+	}
+	/** Rebuild the tray menu after something it shows changed. */
+	refresh() {
+		if (this.tray) this.apply()
 	}
 	apply() {
 		// Keep the tray available before removing the app's other entry point.
 		this.tray.setContextMenu(
 			Menu.buildFromTemplate([
 				{ label: `Open ${edition.name}`, click: () => void this.show() },
+				...this.extraMenuItems(),
 				...this.menuItems(),
 				{ type: 'separator' },
 				{ label: `Quit ${edition.name}`, click: () => this.app.quit() },

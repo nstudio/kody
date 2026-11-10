@@ -253,6 +253,7 @@ const presence = new DesktopPresence({
 	show: () => showApp(),
 	windows: () => [...windows.keys()],
 	changed: () => updateMenu(),
+	extraItems: () => (lab ? lab.trayMenuItems() : []),
 })
 let state = { ecid: null, enabled: false }
 function statePath() {
@@ -776,7 +777,10 @@ else {
 					runner,
 					app,
 					showApp: (path) => showApp(path),
-					onChange: updateMenu,
+					onChange: () => {
+						updateMenu()
+						presence.refresh()
+					},
 				})
 				await lab.start()
 			}
