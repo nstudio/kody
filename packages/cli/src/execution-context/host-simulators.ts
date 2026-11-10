@@ -556,9 +556,15 @@ export class HostSimulators {
 		}
 		if (name === 'stream') {
 			const simdeck = requireSimDeck(tools)
+			const start = input.start === true
+			// SimDeck selects a device by UDID or name; only iOS UDIDs are passed so the argument stays a fixed shape.
+			const select =
+				start && input.id !== undefined && input.id !== null
+					? deviceIdArg('ios', input.id)
+					: null
 			return {
-				command: action,
-				execute: (signal) => this.#stream(simdeck, signal),
+				command: `${action}${start ? ' start' : ''}${select ? ` ${select}` : ''}`,
+				execute: (signal) => this.#stream(simdeck, signal, { start, select }),
 			}
 		}
 		const platform = platformArg(input.platform)
@@ -1171,7 +1177,25 @@ export class HostSimulators {
 		}
 	}
 
-	async #stream(simdeck: string, signal: AbortSignal) {
+	async #stream(
+		simdeck: string,
+		signal: AbortSignal,
+		options: { start?: boolean; select?: string | null } = {},
+	) {
+		if (options.start) {
+			// Bare `simdeck [<udid>]` starts or reuses the background service and selects the device in its UI.
+			const started = await this.#run(
+				simdeck,
+				options.select && options.select !== 'booted' ? [options.select] : [],
+				{ timeoutMs: timeouts.status * 4, maxBytes: 256 * 1024 },
+				'stream',
+			)(signal)
+			if (started.exitCode !== 0) failed('stream', started)
+		}
+		return await this.#streamStatus(simdeck, signal)
+	}
+
+	async #streamStatus(simdeck: string, signal: AbortSignal) {
 		// `service status` on current SimDeck; `daemon status` on 0.1.x.
 		for (const [args, key] of [
 			[['service', 'status'], 'service'],

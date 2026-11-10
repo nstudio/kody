@@ -38,7 +38,11 @@ const safeWebPreferences = {
 class Lab {
 	constructor({ app, runner, showApp, onChange }) {
 		Object.assign(this, { app, runner, showApp, onChange })
-		this.dashboard = new Dashboard({ app })
+		this.dashboard = new Dashboard({
+			app,
+			openLocal: (url) => void this.openSimDeck(url),
+		})
+		this.simdeckWindow = null
 		this.shortcuts = shortcutsFor(process.platform)
 		this.summary = null
 		this.summaryAt = 0
@@ -433,6 +437,42 @@ class Lab {
 		}
 		if (this.lastReview) return this.openReview(this.lastReview)
 		return this.toggleQuick()
+	}
+
+	/** SimDeck's live simulator view, docked to the left of the review panel. Loopback sessions need no token. */
+	async openSimDeck(url) {
+		const origin = new URL(url).origin
+		if (!this.simdeckWindow || this.simdeckWindow.isDestroyed()) {
+			const area = native.screenUnderMouse(screen)
+			const width = Math.min(620, Math.round(area.width * 0.35))
+			const reviewLeft =
+				this.review && !this.review.isDestroyed()
+					? this.review.getBounds().x
+					: area.x + area.width
+			this.simdeckWindow = new BrowserWindow({
+				x: Math.max(area.x, reviewLeft - width - 12),
+				y: area.y + 12,
+				width,
+				height: area.height - 24,
+				title: 'Simulator — Kody Lab',
+				backgroundColor: '#0d1117',
+				webPreferences: { ...safeWebPreferences, partition: 'lab-simdeck' },
+			})
+			this.simdeckWindow.webContents.setWindowOpenHandler(() => ({
+				action: 'deny',
+			}))
+			this.simdeckWindow.on('page-title-updated', (event, title) => {
+				event.preventDefault()
+				this.simdeckWindow.setTitle(`${title || 'SimDeck'} — Kody Lab`)
+			})
+		}
+		const contents = this.simdeckWindow.webContents
+		contents.removeAllListeners('will-navigate')
+		contents.on('will-navigate', (event, next) => {
+			if (new URL(next).origin !== origin) event.preventDefault()
+		})
+		await this.simdeckWindow.loadURL(url)
+		this.simdeckWindow.show()
 	}
 
 	async openDashboard(path) {

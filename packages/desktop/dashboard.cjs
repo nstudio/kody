@@ -18,8 +18,22 @@ function dashboardConfig(app) {
 	return defaults
 }
 
+/** Local tools on this machine, such as the SimDeck service the dashboard starts through kody.simulator. */
+function isLoopback(value) {
+	try {
+		const url = new URL(value)
+		return (
+			url.protocol === 'http:' &&
+			(url.hostname === '127.0.0.1' || url.hostname === 'localhost')
+		)
+	} catch {
+		return false
+	}
+}
+
 class Dashboard {
-	constructor({ app }) {
+	constructor({ app, openLocal }) {
+		this.openLocal = openLocal
 		this.config = dashboardConfig(app)
 		this.origin = `https://${this.config.org}.kody.run`
 		this.base = `${this.origin}/${this.config.app}`
@@ -114,11 +128,8 @@ class Dashboard {
 		this.attached.add(window)
 		const contents = window.webContents
 		contents.setWindowOpenHandler(({ url }) => {
-			if (
-				url.startsWith('https://') ||
-				url.startsWith('http://127.0.0.1') ||
-				url.startsWith('http://localhost')
-			)
+			if (isLoopback(url) && this.openLocal) this.openLocal(url)
+			else if (url.startsWith('https://') || isLoopback(url))
 				void shell.openExternal(url)
 			return { action: 'deny' }
 		})
@@ -145,4 +156,4 @@ class Dashboard {
 	}
 }
 
-module.exports = { Dashboard, partition }
+module.exports = { Dashboard, partition, isLoopback }

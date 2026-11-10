@@ -626,6 +626,38 @@ test('describe and stream need SimDeck; stream never returns its access token', 
 	)
 })
 
+test('stream can start SimDeck and select an iOS device', async () => {
+	const ctx = setup({
+		exec: ({ args }) =>
+			args.length === 1 || args.length === 0
+				? result('SimDeck is running\nLocal: http://127.0.0.1:4310')
+				: result(
+						JSON.stringify({
+							running: true,
+							service: { httpUrl: 'http://127.0.0.1:4310/' },
+						}),
+					),
+	})
+	const udid = '8F1C1C2E-1111-2222-3333-444455556666'
+	assert.deepEqual(
+		await ctx.simulators.call('stream', { start: true, id: udid }, ctx.run),
+		{ url: 'http://127.0.0.1:4310', running: true },
+	)
+	assert.deepEqual(ctx.calls[0].args, [udid])
+	assert.equal(
+		(ctx.authorized[0] as { command: string }).command,
+		`kody.simulator.stream start ${udid}`,
+	)
+	await assert.rejects(
+		ctx.simulators.call(
+			'stream',
+			{ start: true, id: '--bind=0.0.0.0' },
+			ctx.run,
+		),
+		/invalid_request/,
+	)
+})
+
 test('a timed out tool reports timed_out to the audit log', async () => {
 	const ctx = setup({
 		exec: () => result('', { exitCode: null, timedOut: true }),
