@@ -2,6 +2,7 @@ const { fork } = require('node:child_process')
 const { EventEmitter } = require('node:events')
 const { join } = require('node:path')
 const { killWindowsTree } = require('./process-tree.cjs')
+const edition = require('./edition.cjs')
 
 class Runner extends EventEmitter {
 	constructor() {
@@ -21,6 +22,8 @@ class Runner extends EventEmitter {
 			KODY_CREDENTIAL_SOURCE: 'login',
 			KODY_SKIP_SKILL_REFRESH: '1',
 			KODY_SKIP_GIT_HELPER_REFRESH: '1',
+			// A side-by-side build runs its own bundled CLI; auto-update would hand the runner to the published one.
+			...(edition.distinct ? { KODY_DAEMON_AUTO_UPDATE: 'off' } : {}),
 		}
 		// Desktop always uses production and the stored CLI login, never a token
 		// or alternate origin inherited from the terminal that launched Electron.
