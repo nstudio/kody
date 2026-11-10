@@ -1,5 +1,6 @@
 const {
 	BrowserWindow,
+	dialog,
 	globalShortcut,
 	ipcMain,
 	Notification,
@@ -27,8 +28,9 @@ const CI_TAGS = {
  * a dashboard window, and notifications driven by the NativeScript PR dashboard's summary endpoint.
  */
 class Lab {
-	constructor({ app, showApp, onChange }) {
-		Object.assign(this, { app, showApp, onChange })
+	constructor({ app, runner, showApp, onChange }) {
+		Object.assign(this, { app, runner, showApp, onChange })
+		this.simulators = null
 		this.dashboard = new Dashboard({ app })
 		this.summary = null
 		this.summaryAt = 0
@@ -62,6 +64,53 @@ class Lab {
 		this.app.on('will-quit', () => globalShortcut.unregisterAll())
 		this.poll(true)
 		this.timer = setInterval(() => this.poll(false), POLL_MS)
+		void this.readSimulators()
+	}
+
+	async readSimulators() {
+		try {
+			const status = JSON.parse(
+				await this.runner.command([
+					'context',
+					'simulators',
+					'status',
+					'--json',
+				]),
+			)
+			this.simulators = {
+				enabled: status.local?.enabled === true,
+				commands: status.commands?.local?.enabled === true,
+			}
+		} catch {
+			this.simulators = null
+		}
+		this.onChange?.()
+	}
+
+	async setSimulators(enabled) {
+		if (enabled) {
+			const { response } = await dialog.showMessageBox({
+				type: 'warning',
+				message: 'Allow Kody runs to control simulators on this machine?',
+				detail:
+					'Your runs on this machine (with host commands allowed) can list, boot, shut down, install apps on, launch, screenshot, and inspect iOS simulators and Android emulators through kody.simulator.*. Each action is recorded in the context audit log. Turn it off here or with `kody context simulators off`.',
+				buttons: ['Allow simulators', 'Cancel'],
+				defaultId: 1,
+				cancelId: 1,
+			})
+			if (response !== 0) return this.onChange?.()
+		}
+		try {
+			await this.runner.command([
+				'context',
+				'simulators',
+				enabled ? 'on' : 'off',
+				'--json',
+			])
+		} catch (error) {
+			dialog.showErrorBox('Could not change simulator access', error.message)
+		}
+		await this.readSimulators()
 	}
 
 	saveSettings() {
@@ -103,6 +152,17 @@ class Lab {
 						this.saveSettings()
 					},
 				},
+				{ type: 'separator' },
+				{
+					label: 'Allow simulators',
+					type: 'checkbox',
+					enabled: this.simulators !== null,
+					checked: this.simulators?.enabled === true,
+					click: (item) => void this.setSimulators(item.checked),
+				},
+				...(this.simulators?.enabled && !this.simulators.commands
+					? [{ label: 'Simulators also need Allow commands', enabled: false }]
+					: []),
 				{ type: 'separator' },
 				{
 					label: this.nativeReady

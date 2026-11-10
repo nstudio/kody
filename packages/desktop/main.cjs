@@ -772,6 +772,7 @@ else {
 			presence.start()
 			if (edition.distinct) {
 				lab = new Lab({
+					runner,
 					app,
 					showApp: (path) => showApp(path),
 					onChange: updateMenu,
