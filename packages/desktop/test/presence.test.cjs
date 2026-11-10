@@ -127,6 +127,7 @@ for (const platform of ['darwin', 'win32']) {
 			runInNewContext(readFileSync(join(desktopRoot, 'presence.cjs'), 'utf8'), {
 				require: (name) => {
 					if (name === 'electron') return electron
+					if (name === './edition.cjs') return { name: 'Kody', distinct: false }
 					if (name.startsWith('.')) return require(join(desktopRoot, name))
 					return require(name)
 				},
@@ -231,6 +232,7 @@ test('tray mark swaps to a different existing asset when OS chrome updates', () 
 	runInNewContext(readFileSync(join(desktopRoot, 'presence.cjs'), 'utf8'), {
 		require: (name) => {
 			if (name === 'electron') return electron
+			if (name === './edition.cjs') return { name: 'Kody', distinct: false }
 			if (name.startsWith('.')) return require(join(desktopRoot, name))
 			return require(name)
 		},

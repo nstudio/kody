@@ -10,34 +10,46 @@ const { readFileSync, writeFileSync, mkdirSync } = require('node:fs')
 const { join } = require('node:path')
 const native = require('./native.cjs')
 const { Dashboard, partition } = require('./dashboard.cjs')
+const {
+	approvalNotifications,
+	quickResults,
+	resultAction,
+	shortcutsFor,
+	summaryNotifications,
+} = require('./lab-logic.cjs')
 
-const QUICK_SHORTCUT = 'Alt+Space'
-const REVIEW_SHORTCUT = 'Alt+Shift+R'
 const POLL_MS = 3 * 60 * 1000
+const APPROVALS_POLL_MS = 5 * 60 * 1000
+const QUICK_SIZE = { width: 680, height: 440 }
+const isMac = process.platform === 'darwin'
+// `type: 'panel'` is macOS-only; elsewhere these are ordinary always-on-top windows.
+const panelType = isMac ? { type: 'panel' } : {}
 
-const CI_TAGS = {
-	'awaiting-approval': { text: 'Awaiting approval', tone: 'amber' },
-	'not-run': { text: 'Tests not run' },
-	running: { text: 'Running' },
-	failing: { text: 'Failing', tone: 'red' },
-	passing: { text: 'Passing', tone: 'green' },
+const safeWebPreferences = {
+	sandbox: true,
+	contextIsolation: true,
+	nodeIntegration: false,
 }
 
 /**
- * Desktop surfaces for the lab edition: the ⌥Space quick panel, a non-activating review panel beside the simulator,
- * a dashboard window, and notifications driven by the NativeScript PR dashboard's summary endpoint.
+ * Desktop surfaces for the lab edition: the quick panel, a non-activating review panel beside the simulator, a
+ * dashboard window, and notifications driven by the NativeScript PR dashboard and Kody's pending approvals.
  */
 class Lab {
 	constructor({ app, runner, showApp, onChange }) {
 		Object.assign(this, { app, runner, showApp, onChange })
-		this.simulators = null
 		this.dashboard = new Dashboard({ app })
+		this.shortcuts = shortcutsFor(process.platform)
 		this.summary = null
 		this.summaryAt = 0
+		this.summaryError = null
+		this.approvals = null
+		this.simulators = null
 		this.lastReview = null
 		this.quick = null
 		this.review = null
 		this.dashboardWindow = null
+		this.nativeReady = false
 		this.settingsPath = join(app.getPath('userData'), 'lab-settings.json')
 		this.settings = { notifications: true }
 		try {
@@ -46,10 +58,11 @@ class Lab {
 				JSON.parse(readFileSync(this.settingsPath, 'utf8')),
 			)
 		} catch {}
-		this.nativeReady = false
 	}
 
 	async start() {
+		if (process.platform === 'win32')
+			this.app.setAppUserModelId('codes.kody.desktop.lab')
 		this.nativeReady = await native.loadNative()
 		ipcMain.handle('lab:quick', (event, command, input) => {
 			if (!this.quick || event.sender !== this.quick.webContents)
@@ -59,13 +72,157 @@ class Lab {
 			if (command === 'hide') return this.hideQuick()
 			throw new Error('Unknown quick panel command.')
 		})
-		globalShortcut.register(QUICK_SHORTCUT, () => void this.toggleQuick())
-		globalShortcut.register(REVIEW_SHORTCUT, () => void this.toggleReview())
+		globalShortcut.register(this.shortcuts.quick, () => void this.toggleQuick())
+		globalShortcut.register(
+			this.shortcuts.review,
+			() => void this.toggleReview(),
+		)
 		this.app.on('will-quit', () => globalShortcut.unregisterAll())
-		this.poll(true)
-		this.timer = setInterval(() => this.poll(false), POLL_MS)
+		void this.poll(true)
+		void this.pollApprovals(true)
+		setInterval(() => void this.poll(false), POLL_MS).unref()
+		setInterval(() => void this.pollApprovals(false), APPROVALS_POLL_MS).unref()
 		void this.readSimulators()
 	}
+
+	saveSettings() {
+		mkdirSync(this.app.getPath('userData'), { recursive: true })
+		writeFileSync(this.settingsPath, JSON.stringify(this.settings), {
+			mode: 0o600,
+		})
+	}
+
+	menu() {
+		return {
+			label: 'Lab',
+			submenu: [
+				{
+					label: 'Quick panel',
+					accelerator: this.shortcuts.quick,
+					click: () => void this.toggleQuick(),
+				},
+				{
+					label: this.lastReview
+						? `Review panel (#${this.lastReview})`
+						: 'Review panel',
+					accelerator: this.shortcuts.review,
+					click: () => void this.toggleReview(),
+				},
+				{
+					label: 'NativeScript PRs',
+					accelerator: 'CmdOrCtrl+Shift+P',
+					click: () => void this.openDashboard('/'),
+				},
+				{ type: 'separator' },
+				{ label: 'Sync PRs now', click: () => void this.poll(false, true) },
+				{
+					label: 'Notifications',
+					type: 'checkbox',
+					checked: this.settings.notifications,
+					click: (item) => {
+						this.settings.notifications = item.checked
+						this.saveSettings()
+					},
+				},
+				{ type: 'separator' },
+				{
+					label: 'Allow simulators',
+					type: 'checkbox',
+					enabled: this.simulators !== null,
+					checked: this.simulators?.enabled === true,
+					click: (item) => void this.setSimulators(item.checked),
+				},
+				...(this.simulators?.enabled && !this.simulators.commands
+					? [{ label: 'Simulators also need Allow commands', enabled: false }]
+					: []),
+				{ type: 'separator' },
+				{
+					label: this.nativeReady
+						? 'Native panels: on (NativeScript)'
+						: 'Native panels: standard windows on this platform',
+					enabled: false,
+				},
+			],
+		}
+	}
+
+	// ---- Data -----------------------------------------------------------------------------------------------------
+
+	async poll(initial, force = false) {
+		try {
+			if (force)
+				await this.dashboard.json('/api/refresh', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: '{}',
+				})
+			const summary = await this.dashboard.json('/api/summary?sync=1')
+			const previous = this.summary
+			this.summary = summary
+			this.summaryAt = Date.now()
+			this.summaryError = null
+			if (!initial && this.settings.notifications)
+				for (const note of summaryNotifications(previous, summary))
+					this.notify(note)
+			this.onChange?.()
+		} catch (error) {
+			this.summaryError = error.message
+		}
+	}
+
+	async freshSummary() {
+		if (!this.summary || Date.now() - this.summaryAt > 60_000)
+			await this.poll(!this.summary)
+		return this.summary
+	}
+
+	/** Pending Kody approvals in the dashboard's org and the account's active org, through the bundled CLI login. */
+	async pollApprovals(initial) {
+		const orgs = [...new Set([this.dashboard.config.org, null])]
+		const items = []
+		for (const org of orgs) {
+			try {
+				const raw = await this.runner.command([
+					'api',
+					'approvalPendingList',
+					...(org ? ['--org', org] : []),
+					'--params',
+					'{}',
+					'--json',
+				])
+				const body = JSON.parse(raw.slice(raw.indexOf('{')))
+				for (const item of body.result?.items ?? body.items ?? []) {
+					const key = item.key ?? item.id ?? JSON.stringify(item).slice(0, 120)
+					const title =
+						item.summary ??
+						item.title ??
+						item.description ??
+						item.message ??
+						`${item.type ?? 'Approval'}${item.package ? ` for ${item.package.name ?? item.package}` : ''}`
+					if (!items.some((i) => i.key === key))
+						items.push({ key, title: String(title).slice(0, 160) })
+				}
+			} catch {}
+		}
+		const previous = this.approvals
+		this.approvals = items
+		if (!initial && this.settings.notifications)
+			for (const note of approvalNotifications(previous, items))
+				this.notify(note)
+	}
+
+	notify({ title, body, number, kody }) {
+		if (!Notification.isSupported()) return
+		const notification = new Notification({ title, body, silent: false })
+		notification.on('click', () => {
+			if (number) void this.openReview(number)
+			else if (kody) void this.showApp('/account')
+			else void this.openDashboard('/')
+		})
+		notification.show()
+	}
+
+	// ---- Simulators -----------------------------------------------------------------------------------------------
 
 	async readSimulators() {
 		try {
@@ -113,314 +270,41 @@ class Lab {
 		await this.readSimulators()
 	}
 
-	saveSettings() {
-		mkdirSync(this.app.getPath('userData'), { recursive: true })
-		writeFileSync(this.settingsPath, JSON.stringify(this.settings), {
-			mode: 0o600,
-		})
-	}
-
-	menu() {
-		return {
-			label: 'Lab',
-			submenu: [
-				{
-					label: 'Quick panel',
-					accelerator: QUICK_SHORTCUT,
-					click: () => void this.toggleQuick(),
-				},
-				{
-					label: this.lastReview
-						? `Review panel (#${this.lastReview})`
-						: 'Review panel',
-					accelerator: REVIEW_SHORTCUT,
-					click: () => void this.toggleReview(),
-				},
-				{
-					label: 'NativeScript PRs',
-					accelerator: 'CmdOrCtrl+Shift+P',
-					click: () => void this.openDashboard('/'),
-				},
-				{ type: 'separator' },
-				{ label: 'Sync PRs now', click: () => void this.poll(false, true) },
-				{
-					label: 'PR notifications',
-					type: 'checkbox',
-					checked: this.settings.notifications,
-					click: (item) => {
-						this.settings.notifications = item.checked
-						this.saveSettings()
-					},
-				},
-				{ type: 'separator' },
-				{
-					label: 'Allow simulators',
-					type: 'checkbox',
-					enabled: this.simulators !== null,
-					checked: this.simulators?.enabled === true,
-					click: (item) => void this.setSimulators(item.checked),
-				},
-				...(this.simulators?.enabled && !this.simulators.commands
-					? [{ label: 'Simulators also need Allow commands', enabled: false }]
-					: []),
-				{ type: 'separator' },
-				{
-					label: this.nativeReady
-						? 'Native panels: on (NativeScript)'
-						: 'Native panels: unavailable on this Mac',
-					enabled: false,
-				},
-			],
-		}
-	}
-
-	// ---- Data -----------------------------------------------------------------------------------------------------
-
-	async poll(initial, force = false) {
-		try {
-			if (force)
-				await this.dashboard.json('/api/refresh', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: '{}',
-				})
-			const summary = await this.dashboard.json('/api/summary?sync=1')
-			const previous = this.summary
-			this.summary = summary
-			this.summaryAt = Date.now()
-			if (!initial && previous && this.settings.notifications)
-				this.notifyChanges(previous, summary)
-			this.onChange?.()
-		} catch (error) {
-			this.summaryError = error.message
-		}
-	}
-
-	async freshSummary() {
-		if (!this.summary || Date.now() - this.summaryAt > 60_000)
-			await this.poll(!this.summary)
-		return this.summary
-	}
-
-	notifyChanges(before, after) {
-		const old = new Map(before.prs.map((p) => [p.number, p]))
-		const notes = []
-		for (const pr of after.prs) {
-			const was = old.get(pr.number)
-			if (pr.ci === 'awaiting-approval' && was?.ci !== 'awaiting-approval')
-				notes.push({
-					title: `#${pr.number} needs workflow approval`,
-					body: `${pr.title} — ${pr.approvableRuns} run(s) held for ${pr.author}`,
-					number: pr.number,
-				})
-			else if (pr.critical && !was?.critical)
-				notes.push({
-					title: `Critical PR #${pr.number}`,
-					body: `${pr.title}${pr.criticalReason ? ` — ${pr.criticalReason}` : ''}`,
-					number: pr.number,
-				})
-			else if (pr.ci === 'failing' && was && was.ci !== 'failing')
-				notes.push({
-					title: `CI failing on #${pr.number}`,
-					body: pr.title,
-					number: pr.number,
-				})
-		}
-		const oldSessions = new Map(before.sessions.map((s) => [s.id, s]))
-		for (const session of after.sessions) {
-			const was = oldSessions.get(session.id)
-			if (was?.state === session.state) continue
-			if (session.state === 'running' && was)
-				notes.push({
-					title: `Building #${session.number} for ${session.platform}`,
-					body: 'apps/toolbox is installing and launching on this Mac.',
-					number: session.number,
-				})
-			if (session.state === 'failed')
-				notes.push({
-					title: `Toolbox run for #${session.number} failed`,
-					body:
-						session.error ||
-						session.logTail ||
-						'See the review panel for the log.',
-					number: session.number,
-				})
-			if (session.state === 'exited')
-				notes.push({
-					title: `Toolbox run for #${session.number} finished`,
-					body: `Exit code ${session.exitCode ?? 0}`,
-					number: session.number,
-				})
-		}
-		for (const note of notes.slice(0, 5)) this.notify(note)
-		if (notes.length > 5)
-			this.notify({
-				title: `${notes.length - 5} more PR updates`,
-				body: 'Open NativeScript PRs to see them.',
-			})
-	}
-
-	notify({ title, body, number }) {
-		if (!Notification.isSupported()) return
-		const notification = new Notification({ title, body, silent: false })
-		notification.on('click', () =>
-			number ? void this.openReview(number) : void this.openDashboard('/'),
-		)
-		notification.show()
-	}
-
 	// ---- Quick panel ----------------------------------------------------------------------------------------------
 
 	async results(text) {
 		const summary = await this.freshSummary().catch(() => null)
-		const query = text.trim().toLowerCase()
 		const frontmost = native.frontmostApp()
-		const status = summary
-			? `${summary.prs.length} open PRs · synced ${summary.fetchedAt ? new Date(summary.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'never'}`
-			: this.summaryError || 'Loading PRs…'
-		const prs = summary?.prs ?? []
-		const items = []
-		const prItem = (pr) => ({
-			id: `pr:${pr.number}`,
-			reviewId: `review:${pr.number}`,
-			icon: pr.critical ? '◆' : '⇄',
-			title: `#${pr.number} ${pr.title}`,
-			subtitle: `${pr.author} · ${pr.areas.slice(0, 3).join(', ')} · risk ${pr.risk.score} (${pr.risk.level})`,
-			tags: [
-				CI_TAGS[pr.ci],
-				...(pr.critical ? [{ text: 'Critical', tone: 'purple' }] : []),
-			].filter(Boolean),
-		})
-		const number = Number(query.replace(/^#/, ''))
-		if (Number.isSafeInteger(number) && number > 0) {
-			const pr = prs.find((p) => p.number === number)
-			items.push({
-				id: `review:${number}`,
-				icon: '✎',
-				title: `Review #${number}${pr ? ` — ${pr.title}` : ''}`,
-				subtitle: 'Open the review panel beside the simulator',
-			})
-			items.push({
-				id: `pr:${number}`,
-				icon: '↗',
-				title: `Open #${number} in NativeScript PRs`,
-			})
-		}
-		const awaiting = prs.filter((p) => p.ci === 'awaiting-approval')
-		const untested = prs.filter(
-			(p) => p.ci === 'awaiting-approval' || p.ci === 'not-run',
-		)
-		const critical = prs.filter((p) => p.critical)
-		const commands = [
-			{
-				id: 'view:awaiting',
-				icon: '⏸',
-				title: `Workflows awaiting approval (${awaiting.length})`,
-				subtitle:
-					awaiting
-						.slice(0, 3)
-						.map((p) => `#${p.number}`)
-						.join(' ') || 'None right now',
-				keywords: 'approve workflows held ci fork',
-			},
-			{
-				id: 'view:untested',
-				icon: '◌',
-				title: `Tests not run (${untested.length})`,
-				keywords: 'untested ci not run',
-			},
-			{
-				id: 'view:critical',
-				icon: '◆',
-				title: `Critical PRs (${critical.length})`,
-				keywords: 'critical dangerous',
-			},
-			{
-				id: 'view:risk',
-				icon: '▲',
-				title: 'Most dangerous first',
-				keywords: 'risk blast radius severe high',
-			},
-			{
-				id: 'view:all',
-				icon: '☰',
-				title: 'All NativeScript PRs',
-				keywords: 'dashboard list open',
-			},
-			{
-				id: 'sync',
-				icon: '↻',
-				title: 'Sync PRs from GitHub',
-				keywords: 'refresh sync update',
-			},
-			{
-				id: 'kody',
-				icon: 'K',
-				title: 'Open Kody',
-				keywords: 'kody home account',
-			},
-		]
-		if (!query) {
-			items.push(...commands.slice(0, 4))
-			items.push(...awaiting.slice(0, 3).map(prItem))
-			items.push(
-				...prs
-					.slice(0, 5)
-					.filter((p) => !awaiting.includes(p))
-					.map(prItem),
-			)
-		} else {
-			items.push(
-				...commands.filter((c) =>
-					`${c.title} ${c.keywords}`.toLowerCase().includes(query),
-				),
-			)
-			const words = query.replace(/^#/, '').split(/\s+/).filter(Boolean)
-			items.push(
-				...prs
-					.filter((p) => !(Number.isSafeInteger(number) && p.number === number))
-					.filter((p) =>
-						words.every((w) =>
-							`${p.number} ${p.title} ${p.author} ${p.areas.join(' ')} ${p.ci}`
-								.toLowerCase()
-								.includes(w),
-						),
-					)
-					.slice(0, 12)
-					.map(prItem),
-			)
-		}
+		const synced = summary?.fetchedAt
+			? new Date(summary.fetchedAt).toLocaleTimeString([], {
+					hour: 'numeric',
+					minute: '2-digit',
+				})
+			: 'never'
 		return {
-			items: items.slice(0, 14),
-			status,
+			items: quickResults(summary, text, this.approvals ?? []),
+			status: summary
+				? `${summary.prs.length} open PRs · synced ${synced}`
+				: this.summaryError || 'Loading PRs…',
 			frontmost:
 				frontmost && frontmost.pid !== process.pid ? frontmost.name : null,
 		}
 	}
 
 	async runResult(id) {
-		const [kind, value] = id.split(':')
+		const action = resultAction(id)
 		this.hideQuick()
-		if (kind === 'review') return void this.openReview(Number(value))
-		if (kind === 'pr') return void this.openDashboard(`/?pr=${Number(value)}`)
-		if (kind === 'sync') return void this.poll(false, true)
-		if (kind === 'kody') return void this.showApp()
-		const views = {
-			awaiting: '/?ci=awaiting-approval',
-			untested: '/?ci=untested',
-			critical: '/?critical=true',
-			risk: '/?sort=risk-desc',
-			all: '/',
-		}
-		if (kind === 'view' && views[value])
-			return void this.openDashboard(views[value])
+		if (!action) return
+		if (action.type === 'review') return void this.openReview(action.number)
+		if (action.type === 'dashboard') return void this.openDashboard(action.path)
+		if (action.type === 'sync') return void this.poll(false, true)
+		if (action.type === 'kody') return void this.showApp(action.path)
 	}
 
 	createQuick() {
 		const window = new BrowserWindow({
-			type: 'panel',
-			width: 680,
-			height: 440,
+			...panelType,
+			...QUICK_SIZE,
 			show: false,
 			frame: false,
 			transparent: true,
@@ -429,10 +313,8 @@ class Lab {
 			skipTaskbar: true,
 			hasShadow: true,
 			webPreferences: {
+				...safeWebPreferences,
 				preload: join(__dirname, 'quick-panel-preload.cjs'),
-				sandbox: true,
-				contextIsolation: true,
-				nodeIntegration: false,
 			},
 		})
 		window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
@@ -448,10 +330,9 @@ class Lab {
 		this.quick ??= this.createQuick()
 		const area = native.screenUnderMouse(screen)
 		this.quick.setBounds({
-			x: Math.round(area.x + (area.width - 680) / 2),
+			x: Math.round(area.x + (area.width - QUICK_SIZE.width) / 2),
 			y: Math.round(area.y + area.height * 0.18),
-			width: 680,
-			height: 440,
+			...QUICK_SIZE,
 		})
 		if (this.quick.webContents.isLoading())
 			await new Promise((resolve) =>
@@ -471,29 +352,20 @@ class Lab {
 		if (!Number.isSafeInteger(number) || number < 1) return
 		this.lastReview = number
 		this.onChange?.()
-		const area = native.screenUnderMouse(screen)
-		const width = 440
-		const bounds = {
-			x: area.x + area.width - width - 12,
-			y: area.y + 12,
-			width,
-			height: area.height - 24,
-		}
 		if (!this.review || this.review.isDestroyed()) {
+			const area = native.screenUnderMouse(screen)
+			const width = 440
 			this.review = new BrowserWindow({
-				type: 'panel',
-				...bounds,
+				...panelType,
+				x: area.x + area.width - width - 12,
+				y: area.y + 12,
+				width,
+				height: area.height - 24,
 				minWidth: 360,
 				show: false,
-				title: `Review #${number}`,
 				alwaysOnTop: true,
 				backgroundColor: '#0d1117',
-				webPreferences: {
-					partition,
-					sandbox: true,
-					contextIsolation: true,
-					nodeIntegration: false,
-				},
+				webPreferences: { ...safeWebPreferences, partition },
 			})
 			this.review.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 			this.review.on('page-title-updated', (event) => {
@@ -510,12 +382,11 @@ class Lab {
 	}
 
 	async toggleReview() {
-		if (this.review && !this.review.isDestroyed() && this.review.isVisible()) {
-			if (this.review.isFocused()) return this.review.hide()
+		if (this.review && !this.review.isDestroyed()) {
+			if (this.review.isVisible() && this.review.isFocused())
+				return this.review.hide()
 			return native.showWithoutActivating(this.review)
 		}
-		if (this.review && !this.review.isDestroyed())
-			return native.showWithoutActivating(this.review)
 		if (this.lastReview) return this.openReview(this.lastReview)
 		return this.toggleQuick()
 	}
@@ -527,12 +398,7 @@ class Lab {
 				height: 900,
 				title: 'NativeScript PRs — Kody Lab',
 				backgroundColor: '#0d1117',
-				webPreferences: {
-					partition,
-					sandbox: true,
-					contextIsolation: true,
-					nodeIntegration: false,
-				},
+				webPreferences: { ...safeWebPreferences, partition },
 			})
 			this.dashboardWindow.on('page-title-updated', (event, title) => {
 				event.preventDefault()

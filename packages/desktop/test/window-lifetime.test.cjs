@@ -163,6 +163,8 @@ function fixture(platform = 'darwin', background = false) {
 		'./site-capabilities.cjs': { supportsIntegratedTitlebar: () => capability },
 		'./window-navigation.cjs': require('../window-navigation.cjs'),
 		'./app-links.cjs': require('../app-links.cjs'),
+		'./edition.cjs': { name: 'Kody', distinct: false, brandWindow() {} },
+		'./lab.cjs': { Lab: class {} },
 		'./runner.cjs': {
 			Runner: class extends EventEmitter {
 				constructor() {
