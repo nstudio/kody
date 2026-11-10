@@ -29,6 +29,8 @@ export type LocalFsPolicy = {
 	version: 1
 	fs: Array<FsRule>
 	commands?: LocalCommandsPolicy
+	/** `kody.simulator.*` opt-in on this machine; also needs host commands. Absent means off. */
+	simulators?: LocalCommandsPolicy
 	/** Daemon auto-update on this machine. Absent means on. */
 	autoUpdate?: LocalCommandsPolicy
 	/** Extra environment for the daemon service (`kody daemon env`). */
@@ -266,6 +268,14 @@ export async function readLocalPolicy(
 			`${path} has an invalid "commands" entry. Use \`kody context commands on|off\` to fix it.`,
 		)
 	}
+	const simulators = (parsed as { simulators?: unknown }).simulators as
+		| { enabled?: unknown; changedAt?: unknown }
+		| undefined
+	if (simulators !== undefined && typeof simulators?.enabled !== 'boolean') {
+		throw new Error(
+			`${path} has an invalid "simulators" entry. Use \`kody context simulators on|off\` to fix it.`,
+		)
+	}
 	const autoUpdate = (parsed as { autoUpdate?: unknown }).autoUpdate as
 		| { enabled?: unknown; changedAt?: unknown }
 		| undefined
@@ -292,6 +302,7 @@ export async function readLocalPolicy(
 		version: 1,
 		fs: (fs as Array<FsRule>).map(({ path, mode }) => ({ path, mode })),
 		...(commands ? { commands: toggle(commands) } : {}),
+		...(simulators ? { simulators: toggle(simulators) } : {}),
 		...(autoUpdate ? { autoUpdate: toggle(autoUpdate) } : {}),
 		...(serviceEnv ? { serviceEnv } : {}),
 	}
@@ -332,6 +343,27 @@ export async function setLocalCommandsEnabled(input: {
 	return next
 }
 
+/** Whether this machine's owner turned `kody.simulator.*` on locally. */
+export async function readLocalSimulatorsEnabled(
+	path: string = localPolicyPath(),
+) {
+	return (await readLocalPolicy(path)).simulators?.enabled === true
+}
+
+export async function setLocalSimulatorsEnabled(input: {
+	enabled: boolean
+	policyPath?: string
+}) {
+	const policyPath = input.policyPath ?? localPolicyPath()
+	const current = await readLocalPolicy(policyPath)
+	const next: LocalFsPolicy = {
+		...current,
+		simulators: { enabled: input.enabled, changedAt: new Date().toISOString() },
+	}
+	await writeLocalPolicy(policyPath, next)
+	return next
+}
+
 export async function writeLocalPolicy(path: string, policy: LocalFsPolicy) {
 	await mkdir(dirname(path), { recursive: true, mode: 0o700 })
 	const temp = `${path}.${process.pid}.tmp`
@@ -367,6 +399,7 @@ export async function allowLocalPath(input: {
 		version: 1,
 		fs,
 		...(policy.commands ? { commands: policy.commands } : {}),
+		...(policy.simulators ? { simulators: policy.simulators } : {}),
 		...(policy.autoUpdate ? { autoUpdate: policy.autoUpdate } : {}),
 	}
 	await writeLocalPolicy(policyPath, next)
@@ -389,6 +422,7 @@ export async function removeLocalPath(input: {
 		version: 1,
 		fs,
 		...(policy.commands ? { commands: policy.commands } : {}),
+		...(policy.simulators ? { simulators: policy.simulators } : {}),
 		...(policy.autoUpdate ? { autoUpdate: policy.autoUpdate } : {}),
 	}
 	if (removed) await writeLocalPolicy(policyPath, next)

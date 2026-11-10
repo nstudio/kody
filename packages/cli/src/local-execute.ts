@@ -160,6 +160,17 @@ export type LocalExecuteInput = {
 		signal: AbortSignal
 		authorize: (input: Record<string, unknown>) => Promise<void>
 	}) => Promise<unknown>
+	/**
+	 * Serves `kody.simulator.<name>` on an execution context. Authorized and
+	 * audited through the same hop as `hostCommands`. Absent: simulator calls
+	 * fail with `execution_context_simulator_requires_context`.
+	 */
+	hostSimulators?: (call: {
+		name: string
+		args: unknown
+		signal: AbortSignal
+		authorize: (input: Record<string, unknown>) => Promise<void>
+	}) => Promise<unknown>
 	/** Told about the workerd process so a daemon can reap it after a crash. */
 	workerTracker?: LocalWorkerTracker
 }
@@ -361,6 +372,32 @@ export async function runLocalExecute(
 					call.path[2] !== 'authorize'
 				) {
 					return await hostCommands({
+						name: call.path[2] as string,
+						args: call.args[0],
+						signal,
+						authorize: async (authorizeInput) => {
+							await callCapabilityProxy({
+								...client,
+								path: ['kody', 'command', 'authorize'],
+								args: [authorizeInput],
+								conversationId: input.conversationId,
+								signal,
+							})
+						},
+					})
+				}
+				if (
+					call.path.length === 3 &&
+					call.path[0] === 'kody' &&
+					call.path[1] === 'simulator'
+				) {
+					const hostSimulators = input.hostSimulators
+					if (!hostSimulators) {
+						throw new Error(
+							`kody.simulator.${String(call.path[2])} controls iOS simulators and Android emulators on an execution context (a machine running kody daemon or the Kody desktop app with commands and simulators turned on). This run is not on one: it ran in Kody cloud or with \`kody execute --local\`. Route the run to a context (executionContext) instead. (execution_context_simulator_requires_context)`,
+						)
+					}
+					return await hostSimulators({
 						name: call.path[2] as string,
 						args: call.args[0],
 						signal,

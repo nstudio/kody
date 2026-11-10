@@ -47,6 +47,7 @@ import {
 	otherLocalDaemons,
 } from './runner-lock.js'
 import { HostCommands } from './host-commands.js'
+import { HostSimulators } from './host-simulators.js'
 import { createPackageGraphCache } from './package-graph-cache.js'
 import {
 	type HostAccessContext,
@@ -63,9 +64,11 @@ import {
 	localPolicyPath,
 	readLocalCommandsEnabled,
 	readLocalPolicy,
+	readLocalSimulatorsEnabled,
 	removeLocalPath,
 	setLocalAutoUpdateEnabled,
 	setLocalCommandsEnabled,
+	setLocalSimulatorsEnabled,
 } from './fs-access.js'
 import {
 	contextWorkersDir,
@@ -200,6 +203,9 @@ async function runCommand(
 	}
 	if (input.command === 'context' && sub === 'commands') {
 		return await runCommandsOptInCommand(input, rest)
+	}
+	if (input.command === 'context' && sub === 'simulators') {
+		return await runSimulatorsOptInCommand(input, rest)
 	}
 	if (input.command === 'context' && sub === 'policy') {
 		return await runPolicyCommand(input, rest)
@@ -705,11 +711,18 @@ Run \`kody daemon\` in a terminal, or fix that and run: kody daemon install --co
 		const hostCommands = new HostCommands({
 			localEnabled: await readLocalCommandsEnabled().catch(() => false),
 		})
+		const hostSimulators = new HostSimulators({
+			hostCommands,
+			localEnabled: await readLocalSimulatorsEnabled().catch(() => false),
+		})
 		const commandsPolicyPath = localPolicyPath()
 		const onCommandsPolicyChange = () => {
 			void readLocalCommandsEnabled()
 				.catch(() => false)
 				.then((enabled) => hostCommands.setLocalEnabled(enabled))
+			void readLocalSimulatorsEnabled()
+				.catch(() => false)
+				.then((enabled) => hostSimulators.setLocalEnabled(enabled))
 		}
 		watchFile(commandsPolicyPath, { interval: 2000 }, onCommandsPolicyChange)
 		const lockStatePath = servicePaths({
@@ -898,6 +911,7 @@ Run \`kody daemon\` in a terminal, or fix that and run: kody daemon install --co
 					!forcedUpdate &&
 					hostCommands.runningBackground() > 0,
 				hostCommands,
+				hostSimulators,
 				execute: (run) =>
 					runContextRun({
 						...run,
@@ -1282,6 +1296,49 @@ async function runCommandsOptInCommand(
 		lines.join('\n'),
 	)
 	return contexts.some((context) => context.error) ? 1 : 0
+}
+
+const simulatorsUsage =
+	'Usage: kody context simulators [status | on | off] [--json]'
+
+/**
+ * `kody.simulator.*` opt-in. Local only: it adds simulator control on top of
+ * host commands, which keep their own local opt-in and server grant.
+ */
+async function runSimulatorsOptInCommand(
+	input: ExecutionContextCommandInput,
+	[action = 'status', ...extra]: Array<string>,
+): Promise<number> {
+	if (extra.length > 0 || !['status', 'on', 'off'].includes(action)) {
+		throw new Error(simulatorsUsage)
+	}
+	if (action !== 'status') {
+		await setLocalSimulatorsEnabled({ enabled: action === 'on' })
+	}
+	const local = await readLocalSimulatorsEnabled()
+	const commands = await readLocalCommandsEnabled()
+	const lines = [
+		`Simulator control on this machine: ${local ? 'on' : 'off'} (local opt-in, ${localPolicyPath()}).`,
+		`Host commands on this machine: ${commands ? 'on' : 'off'}. kody.simulator.* needs both, plus commands on in Kody (kody context commands status).`,
+	]
+	if (action === 'on') {
+		lines.push(
+			'Your own runs on this context can now list, boot, shut down, install apps on, launch, screenshot, and inspect iOS simulators and Android emulators here. Every action is recorded in the context audit log. Turn it off any time: kody context simulators off or the desktop app.',
+		)
+		if (!commands)
+			lines.push('Turn host commands on with: kody context commands on')
+	} else if (action === 'status' && !local) {
+		lines.push('Turn it on with: kody context simulators on')
+	}
+	out(
+		input,
+		{
+			local: { enabled: local, path: localPolicyPath() },
+			commands: { local: { enabled: commands } },
+		},
+		lines.join('\n'),
+	)
+	return 0
 }
 
 async function runPolicyCommand(

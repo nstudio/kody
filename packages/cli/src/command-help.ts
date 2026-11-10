@@ -651,6 +651,36 @@ export const commandHelpTree: Array<CommandHelpNode> = [
 					},
 				],
 			},
+			{
+				name: 'simulators',
+				summary:
+					'Turn simulator control (kody.simulator.*) on this machine on or off',
+				usage: ['kody context simulators [<command>] [--json]'],
+				flags: [jsonFlag],
+				notes: [
+					'With no command, shows the status. Runs also need host commands on (kody context commands on).',
+				],
+				subcommands: [
+					{
+						name: 'status',
+						summary: 'Show whether simulator control is on',
+						usage: ['kody context simulators status [--json]'],
+						flags: [jsonFlag],
+					},
+					{
+						name: 'on',
+						summary: 'Turn simulator control on (only on this machine)',
+						usage: ['kody context simulators on [--json]'],
+						flags: [jsonFlag],
+					},
+					{
+						name: 'off',
+						summary: 'Turn simulator control off',
+						usage: ['kody context simulators off [--json]'],
+						flags: [jsonFlag],
+					},
+				],
+			},
 		],
 	},
 	{

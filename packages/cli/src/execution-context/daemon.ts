@@ -1,4 +1,5 @@
 import type { HostCommandFinished, HostCommands } from './host-commands.js'
+import type { HostSimulators } from './host-simulators.js'
 import { type EffectiveFs, emptyEffectiveFs, fsFeatures } from './fs-access.js'
 import {
 	classifyFrameText,
@@ -33,6 +34,7 @@ export type ContextRunExecutor = (input: {
 	fetchFn: typeof fetch
 	signal: AbortSignal
 	hostCommands?: HostCommands
+	hostSimulators?: HostSimulators
 	/** Current grant egress (welcome / grant.update); the run enforces it. */
 	egress: EcpGrant['egress']
 	/** Host folders this run may use right now (server grant ∩ local policy). */
@@ -112,6 +114,8 @@ type DaemonInput = {
 	execute: ContextRunExecutor
 	/** Host commands (ADR 0093); lives across reconnects so background jobs survive them. */
 	hostCommands?: HostCommands
+	/** `kody.simulator.*`; needs `hostCommands` too. */
+	hostSimulators?: HostSimulators
 	log: (line: string) => void
 	fetchFn?: typeof fetch
 	WebSocketImpl?: typeof WebSocket
@@ -417,6 +421,9 @@ export async function runDaemonConnection(input: DaemonInput) {
 				signal: run.abort.signal,
 				...(input.hostCommands && operatorRun
 					? { hostCommands: input.hostCommands }
+					: {}),
+				...(input.hostSimulators && operatorRun
+					? { hostSimulators: input.hostSimulators }
 					: {}),
 				egress: grantEgress,
 				fetchFn: runScopedFetch({

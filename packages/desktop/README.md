@@ -120,6 +120,11 @@ it off, and the controls refresh while the machine panel is open. Commands are
 disabled before setup. See
 [Host commands](../../docs/use/execution-contexts.md#host-commands).
 
+**Machine > Allow simulators** turns on `kody.simulator.*` (iOS simulator and
+Android emulator control) with the CLI's `context simulators on|off`. It works
+only while host commands are allowed too. See
+[Simulators](../../docs/use/execution-contexts.md#simulators).
+
 ## Packaging and checks
 
 ```sh

@@ -249,3 +249,48 @@ Contacts if the run looks up names. The runner then stops when you quit the app.
   `execution_context_command_not_granted` (the caller lacks the command grant),
   `execution_context_command_requires_context` (the run is in Kody cloud or a
   `--local` run).
+
+## Simulators
+
+`kody.simulator.*` in `kody:runtime` controls iOS simulators and Android
+emulators on the machine with a fixed set of actions, so a package (for example
+a PR-review dashboard that launches a test app) needs no raw shell for it. A
+call needs host commands on (both switches above) and a second local opt-in:
+
+- Desktop app: **Machine › Allow simulators**.
+- CLI: `kody context simulators on`, `off`, or `status` (`--json`).
+
+Every call is authorized and audited like a host command: the audit log records
+the fixed action, such as `kody.simulator.screenshot ios <udid>`. Arguments are
+checked (simulator UDIDs or `booted`, adb serials, AVD names, bundle ids, http,
+https, or app URL schemes, absolute `.app` or `.apk` paths) and the tools run
+without a shell.
+
+| Action                                            | Runs                                                                                          | Returns                                                                               |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `list()`                                          | `xcrun simctl list devices available`, `adb devices -l`, `emulator -list-avds`                | `{ ios: { available, devices }, android: { adb, emulator, devices, avds }, simdeck }` |
+| `boot({ platform, id, timeoutMs? })`              | `simctl boot`; Android: starts the AVD `id` and waits (default 60 s) for adb to see it booted | `{ booted, alreadyBooted, serial?, timedOut? }`                                       |
+| `shutdown({ platform, id })`                      | `simctl shutdown`; `adb -s <serial> emu kill` (`id` is a serial or a running AVD's name)      | `{ shutdown, alreadyShutdown }`                                                       |
+| `install({ platform, id, appPath })`              | `simctl install`; `adb install -r`                                                            | `{ installed }`                                                                       |
+| `launch({ platform, id, appId })`                 | `simctl launch`; `adb shell monkey -p <appId>`                                                | `{ launched, pid }`                                                                   |
+| `terminate({ platform, id, appId })`              | `simctl terminate`; `adb shell am force-stop`                                                 | `{ terminated }`                                                                      |
+| `openUrl({ platform, id, url })`                  | `simctl openurl`; `adb shell am start -a android.intent.action.VIEW -d`                       | `{ opened }`                                                                          |
+| `screenshot({ platform, id })`                    | `simctl io … screenshot`; `adb exec-out screencap -p`                                         | `{ mimeType, base64, bytes, width, height }`, at most 8 MB                            |
+| `describe({ platform, id?, source?, maxDepth? })` | `simdeck describe --format agent`                                                             | `{ source, text, truncated }`, at most 256 KB                                         |
+| `stream()`                                        | `simdeck service status`                                                                      | `{ url, running }` (default `http://127.0.0.1:4310`)                                  |
+
+On iOS `id` is a UDID; on Android it is an adb serial such as `emulator-5554`,
+except `boot`, which takes an AVD name. `describe` and `stream` need
+[SimDeck](https://github.com/NativeScript/SimDeck) on the daemon's `PATH`
+(`kody daemon env set PATH=…` for a background service); `source` is one of
+`auto`, `nativescript`, `native-ax`, `uikit`, `swiftui`, `react-native`,
+`flutter`, `android-uiautomator`. Android tools are also found in
+`ANDROID_HOME`, `ANDROID_SDK_ROOT`, or the SDK's default folder.
+
+Errors: `execution_context_simulators_off` (the simulators opt-in is off),
+`execution_context_commands_off` (host commands are off),
+`execution_context_simulator_tool_missing` (Xcode, adb, emulator, or SimDeck is
+not installed), `execution_context_simulator_failed` (the tool failed or timed
+out; the message carries its output), and
+`execution_context_simulator_requires_context` (a `--local` run, or a run by
+someone the machine is shared with).

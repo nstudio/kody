@@ -5,6 +5,7 @@ import type {
 import { egressPolicyFromGrant } from '../local-egress.js'
 import type { EffectiveFs } from './fs-access.js'
 import type { HostCommands } from './host-commands.js'
+import type { HostSimulators } from './host-simulators.js'
 import type { LocalExecuteTiming } from '../local-execute.js'
 import type { PackageGraphCache } from './package-graph-cache.js'
 import type { LocalWorkerTracker } from './worker-tracker.js'
@@ -24,6 +25,7 @@ export async function runContextRun(input: {
 	egress?: EcpGrant['egress']
 	hostFs?: () => EffectiveFs
 	hostCommands?: HostCommands
+	hostSimulators?: HostSimulators
 	packageGraphCache?: PackageGraphCache
 }) {
 	const source = input.request.source
@@ -60,6 +62,7 @@ export async function runContextRun(input: {
 		}
 	}
 	const hostCommands = input.hostCommands
+	const hostSimulators = input.hostSimulators
 	const { runLocalExecute } = await import('../local-execute.js')
 	let timing: LocalExecuteTiming | undefined
 	const result = await runLocalExecute({
@@ -86,6 +89,21 @@ export async function runContextRun(input: {
 							runId: input.request.runId,
 							requesterUserId: input.request.requestedBy.userId,
 							// The run's signal: a cancel or deadline kills a foreground command.
+							signal: input.signal,
+							authorize: call.authorize,
+						}),
+				}
+			: {}),
+		...(hostSimulators
+			? {
+					hostSimulators: async (call: {
+						name: string
+						args: unknown
+						authorize: (input: Record<string, unknown>) => Promise<void>
+					}) =>
+						await hostSimulators.call(call.name, call.args, {
+							runId: input.request.runId,
+							requesterUserId: input.request.requestedBy.userId,
 							signal: input.signal,
 							authorize: call.authorize,
 						}),

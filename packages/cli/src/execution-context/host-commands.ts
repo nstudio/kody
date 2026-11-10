@@ -557,6 +557,11 @@ export class HostCommands {
 		return child
 	}
 
+	/** Sends `command.finished` for a process another host runner (e.g. `kody.simulator.*`) authorized. */
+	reportFinished(finished: HostCommandFinished) {
+		this.#report(finished)
+	}
+
 	#report(finished: HostCommandFinished) {
 		const requeue = () => {
 			if (this.#unreported.length < 256) this.#unreported.push(finished)
