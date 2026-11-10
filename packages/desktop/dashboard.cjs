@@ -109,6 +109,9 @@ class Dashboard {
 
 	/** Keep a lab window on the dashboard and Kody's sign-in pages; other links open in the default browser. */
 	attach(window) {
+		this.attached ??= new WeakSet()
+		if (this.attached.has(window)) return
+		this.attached.add(window)
 		const contents = window.webContents
 		contents.setWindowOpenHandler(({ url }) => {
 			if (
