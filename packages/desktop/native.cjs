@@ -93,10 +93,7 @@ function screenUnderMouse(screen) {
 }
 
 module.exports = {
-	supported,
 	loadNative,
-	ready,
-	nsWindowFor,
 	showWithoutActivating,
 	hideReturningFocus,
 	frontmostApp,

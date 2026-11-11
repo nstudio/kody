@@ -76,7 +76,8 @@ class Dashboard {
 				clearTimeout(timer)
 				if (!window.isDestroyed()) window.destroy()
 				this.handoff = null
-				error ? reject(error) : resolve()
+				if (error) reject(error)
+				else resolve()
 			}
 			window.webContents.on('did-navigate', (_event, url) => {
 				if (url.startsWith(this.origin)) finish()
@@ -156,4 +157,4 @@ class Dashboard {
 	}
 }
 
-module.exports = { Dashboard, partition, isLoopback }
+module.exports = { Dashboard, partition }

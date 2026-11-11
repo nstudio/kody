@@ -27,7 +27,7 @@ type HostSimulatorErrorCode =
 	| 'execution_context_simulator_failed'
 	| 'invalid_request'
 
-export class HostSimulatorError extends Error {
+class HostSimulatorError extends Error {
 	constructor(
 		readonly code: HostSimulatorErrorCode,
 		message: string,
@@ -38,7 +38,7 @@ export class HostSimulatorError extends Error {
 	}
 }
 
-export type SimulatorExecResult = {
+type SimulatorExecResult = {
 	exitCode: number | null
 	stdout: Buffer
 	stderr: string
@@ -62,7 +62,7 @@ export type SimulatorTools = {
 
 export type SimulatorPlatform = 'ios' | 'android'
 
-export const simulatorActions = [
+const simulatorActions = [
 	'list',
 	'boot',
 	'shutdown',
@@ -75,7 +75,7 @@ export const simulatorActions = [
 	'stream',
 ] as const
 
-export const describeSources = [
+const describeSources = [
 	'auto',
 	'nativescript',
 	'native-ax',
@@ -86,7 +86,7 @@ export const describeSources = [
 	'android-uiautomator',
 ] as const
 
-export const simulatorLimits = {
+const simulatorLimits = {
 	screenshotMaxBytes: 8 * 1024 * 1024,
 	describeMaxBytes: 256 * 1024,
 	toolOutputMaxBytes: 8 * 1024 * 1024,
@@ -116,7 +116,7 @@ const timeouts = {
 	probe: 5_000,
 }
 
-export const defaultSimDeckUrl = 'http://127.0.0.1:4310'
+const defaultSimDeckUrl = 'http://127.0.0.1:4310'
 
 const iosUdidPattern =
 	/^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/
@@ -199,7 +199,7 @@ export function deviceIdArg(platform: SimulatorPlatform, raw: unknown) {
 	return raw
 }
 
-export function avdNameArg(raw: unknown) {
+function avdNameArg(raw: unknown) {
 	if (typeof raw !== 'string' || !avdNamePattern.test(raw)) {
 		invalid(
 			'`id` must be an AVD name (letters, digits, ".", "_", "-"); kody.simulator.list() shows them under android.avds.',
@@ -323,7 +323,7 @@ function decodeCapped(buffer: Buffer, cut: boolean) {
 }
 
 /** Runs a tool with `execFile` (no shell) and the daemon's env minus `KODY_*`. */
-export const execSimulatorTool: SimulatorExec = (file, args, options) =>
+const execSimulatorTool: SimulatorExec = (file, args, options) =>
 	new Promise((resolve) => {
 		execFile(
 			file,

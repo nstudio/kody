@@ -8,7 +8,13 @@ const {
 } = require('electron')
 const { readFileSync, writeFileSync, mkdirSync } = require('node:fs')
 const { join } = require('node:path')
-const native = require('./native.cjs')
+const {
+	frontmostApp,
+	hideReturningFocus,
+	loadNative,
+	screenUnderMouse,
+	showWithoutActivating,
+} = require('./native.cjs')
 const { Dashboard, partition } = require('./dashboard.cjs')
 const {
 	approvalNotifications,
@@ -67,7 +73,7 @@ class Lab {
 	async start() {
 		if (process.platform === 'win32')
 			this.app.setAppUserModelId('codes.kody.desktop.lab')
-		this.nativeReady = await native.loadNative()
+		this.nativeReady = await loadNative()
 		ipcMain.handle('lab:quick', (event, command, input) => {
 			if (!this.quick || event.sender !== this.quick.webContents)
 				throw new Error('Only the quick panel can call this.')
@@ -316,7 +322,7 @@ class Lab {
 	results(text) {
 		this.refreshSummarySoon()
 		const summary = this.summary
-		const frontmost = native.frontmostApp()
+		const frontmost = frontmostApp()
 		const synced = summary?.fetchedAt
 			? new Date(summary.fetchedAt).toLocaleTimeString([], {
 					hour: 'numeric',
@@ -375,7 +381,7 @@ class Lab {
 	async toggleQuick() {
 		if (this.quick?.isVisible()) return this.hideQuick({ returnFocus: true })
 		this.quick ??= this.createQuick()
-		const area = native.screenUnderMouse(screen)
+		const area = screenUnderMouse(screen)
 		this.quick.setBounds({
 			x: Math.round(area.x + (area.width - QUICK_SIZE.width) / 2),
 			y: Math.round(area.y + area.height * 0.18),
@@ -385,15 +391,15 @@ class Lab {
 			await new Promise((resolve) =>
 				this.quick.webContents.once('did-finish-load', resolve),
 			)
-		this.quickReturnTo = native.frontmostApp()
+		this.quickReturnTo = frontmostApp()
 		this.quickShownAt = Date.now()
-		native.showWithoutActivating(this.quick)
+		showWithoutActivating(this.quick)
 		this.quick.webContents.send('lab:quick-show', {})
 	}
 
 	hideQuick({ returnFocus = false } = {}) {
 		if (!this.quick?.isVisible()) return
-		if (returnFocus) native.hideReturningFocus(this.quick, this.quickReturnTo)
+		if (returnFocus) hideReturningFocus(this.quick, this.quickReturnTo)
 		else this.quick.hide()
 	}
 
@@ -404,7 +410,7 @@ class Lab {
 		this.lastReview = number
 		this.onChange?.()
 		if (!this.review || this.review.isDestroyed()) {
-			const area = native.screenUnderMouse(screen)
+			const area = screenUnderMouse(screen)
 			const width = 440
 			this.review = new BrowserWindow({
 				...panelType,
@@ -429,14 +435,14 @@ class Lab {
 			this.review,
 			`/?view=review&pr=${number}&embed=panel`,
 		)
-		native.showWithoutActivating(this.review)
+		showWithoutActivating(this.review)
 	}
 
 	async toggleReview() {
 		if (this.review && !this.review.isDestroyed()) {
 			if (this.review.isVisible() && this.review.isFocused())
 				return this.review.hide()
-			return native.showWithoutActivating(this.review)
+			return showWithoutActivating(this.review)
 		}
 		if (this.lastReview) return this.openReview(this.lastReview)
 		return this.toggleQuick()
@@ -446,7 +452,7 @@ class Lab {
 	async openSimDeck(url) {
 		const origin = new URL(url).origin
 		if (!this.simdeckWindow || this.simdeckWindow.isDestroyed()) {
-			const area = native.screenUnderMouse(screen)
+			const area = screenUnderMouse(screen)
 			const width = Math.min(620, Math.round(area.width * 0.35))
 			const reviewLeft =
 				this.review && !this.review.isDestroyed()

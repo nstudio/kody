@@ -41,12 +41,16 @@ const {
 	openInBrowser,
 } = require('./app-links.cjs')
 
-const edition = require('./edition.cjs')
+const {
+	name: editionName,
+	distinct: distinctEdition,
+	brandWindow,
+} = require('./edition.cjs')
 const { Lab } = require('./lab.cjs')
 let lab = null
 // The name decides the single-instance lock and the userData folder, so a build with its own productName runs beside
 // the published app instead of handing off to it.
-app.setName(edition.name)
+app.setName(editionName)
 let appOrigin = productionOrigin
 const developmentUrl = process.argv
 	.find((arg) => arg.startsWith('--app-url='))
@@ -594,7 +598,7 @@ async function createWindow(path = '/account') {
 		height: 860,
 		minWidth: 720,
 		minHeight: 480,
-		title: edition.name,
+		title: editionName,
 		icon: join(__dirname, 'assets/icon.png'),
 		...(integratedTitlebar
 			? { titleBarStyle: 'hidden', trafficLightPosition: { x: 16, y: 13 } }
@@ -620,7 +624,7 @@ async function createWindow(path = '/account') {
 		integratedTitlebar,
 	})
 	presence.applyWindow(window)
-	edition.brandWindow(window)
+	brandWindow(window)
 	const record = { navigation, failedLoadUrl: undefined }
 	windows.set(window, record)
 	lastWindow = window
@@ -762,7 +766,7 @@ else {
 			if (process.platform === 'darwin')
 				app.dock.setIcon(join(__dirname, 'assets/icon.png'))
 			// A side-by-side build must never install the published app over itself.
-			updates = edition.distinct
+			updates = distinctEdition
 				? null
 				: startUpdates({
 						app,
@@ -772,7 +776,7 @@ else {
 					})
 			loadState()
 			presence.start()
-			if (edition.distinct) {
+			if (distinctEdition) {
 				lab = new Lab({
 					runner,
 					app,
