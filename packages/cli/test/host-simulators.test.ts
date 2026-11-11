@@ -685,6 +685,17 @@ test('stream with a simulator id opens the viewer on that simulator', async () =
 		ctx.simulators.call('stream', { id: 'not a udid' }, ctx.run),
 		/not a simulator UDID/,
 	)
+	assert.deepEqual(
+		await ctx.simulators.call(
+			'stream',
+			{ platform: 'android', id: 'Pixel_9_API_36' },
+			ctx.run,
+		),
+		{
+			url: 'http://127.0.0.1:4310/?device=android%3APixel_9_API_36',
+			running: true,
+		},
+	)
 })
 
 test('a timed out tool reports timed_out to the audit log', async () => {

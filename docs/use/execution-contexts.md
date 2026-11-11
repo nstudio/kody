@@ -277,13 +277,14 @@ without a shell.
 | `openUrl({ platform, id, url })`                  | `simctl openurl`; `adb shell am start -a android.intent.action.VIEW -d`                               | `{ opened }`                                                                          |
 | `screenshot({ platform, id })`                    | `simctl io … screenshot`; `adb exec-out screencap -p`                                                 | `{ mimeType, base64, bytes, width, height }`, at most 8 MB                            |
 | `describe({ platform, id?, source?, maxDepth? })` | `simdeck describe --format agent`                                                                     | `{ source, text, truncated }`, at most 256 KB                                         |
-| `stream({ start? })`                              | SimDeck `/api/health`; with `start`, `simdeck service start` (0.2+) or `simdeck daemon start` (0.1.x) | `{ url, running }` (default `http://127.0.0.1:4310`)                                  |
+| `stream({ start?, platform?, id? })`              | SimDeck `/api/health`; with `start`, `simdeck service start` (0.2+) or `simdeck daemon start` (0.1.x) | `{ url, running }` (default `http://127.0.0.1:4310`)                                  |
 
 On iOS `id` is a UDID; on Android it is an adb serial such as `emulator-5554`,
-except `boot`, which takes an AVD name. `describe` and `stream` need
-[SimDeck](https://github.com/NativeScript/SimDeck) on the daemon's `PATH`
-(`kody daemon env set PATH=…` for a background service); `source` is one of
-`auto`, `nativescript`, `native-ax`, `uikit`, `swiftui`, `react-native`,
+except `boot`, and `stream` with `platform: 'android'`, which take an AVD name.
+`stream` with an `id` returns a viewer URL opened on that device. `describe` and
+`stream` need [SimDeck](https://github.com/NativeScript/SimDeck) on the daemon's
+`PATH` (`kody daemon env set PATH=…` for a background service); `source` is one
+of `auto`, `nativescript`, `native-ax`, `uikit`, `swiftui`, `react-native`,
 `flutter`, `android-uiautomator`. Android tools are also found in
 `ANDROID_HOME`, `ANDROID_SDK_ROOT`, or the SDK's default folder.
 
