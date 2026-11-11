@@ -670,6 +670,35 @@ test('stream reuses a healthy SimDeck and only starts it in the background', asy
 	)
 })
 
+test('describe on an Android emulator passes SimDeck its AVD name', async () => {
+	const ctx = setup({
+		exec: ({ args }) =>
+			args.join(' ') === '-s emulator-5554 emu avd name'
+				? result('Kody_Review\nOK\n')
+				: args[0] === 'describe'
+					? result('- @e1 FrameLayout\n')
+					: undefined,
+	})
+	const tree = await ctx.simulators.call(
+		'describe',
+		{ platform: 'android', id: 'emulator-5554', source: 'auto' },
+		ctx.run,
+	)
+	assert.equal((tree as { text: string }).text, '- @e1 FrameLayout\n')
+	assert.deepEqual(ctx.calls.find((c) => c.args[0] === 'describe')?.args, [
+		'describe',
+		'android:Kody_Review',
+		'--format',
+		'agent',
+		'--source',
+		'auto',
+	])
+	assert.equal(
+		commandOf(ctx.authorized[0]).command,
+		'kody.simulator.describe android emulator-5554 --format agent --source auto',
+	)
+})
+
 test('stream with a simulator id opens the viewer on that simulator', async () => {
 	const udid = '784FDD63-8E46-49AE-855A-FB0A7D860476'
 	const ctx = setup({ probeSimDeck: async () => 4310 })

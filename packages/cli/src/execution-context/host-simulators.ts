@@ -609,9 +609,18 @@ export class HostSimulators {
 				source,
 				...(maxDepth === null ? [] : ['--max-depth', String(maxDepth)]),
 			]
+			const adb = platform === 'android' && id ? tools.adb : null
 			return {
 				command: [action, platform, ...args.slice(1)].join(' '),
-				execute: (signal) => this.#describe(simdeck, args, source, signal),
+				execute: async (signal) => {
+					// SimDeck names Android emulators `android:<AVD name>`; an adb serial would be looked up as an iOS simulator.
+					const avd =
+						adb && id ? await this.#emulatorAvd(adb, id, signal) : null
+					const deviceArgs = avd
+						? args.map((arg) => (arg === id ? `android:${avd}` : arg))
+						: args
+					return await this.#describe(simdeck, deviceArgs, source, signal)
+				},
 			}
 		}
 		if (platform === 'android' && name === 'boot') {
