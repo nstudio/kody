@@ -1,9 +1,10 @@
 # Kody desktop: native surfaces (nstudio local build)
 
-Local branch `nstudio/native-surfaces` of kody-hq/kody. Goal: a macOS build we
-use daily and demo in one video, then ask the maintainers whether they want any
-of it before opening PRs (CLA required per commit). Windows and Linux follow
-once macOS is solid.
+Local branch `nstudio/native-surfaces` of kody-hq/kody. Learnings and the
+upstream PR plan: [kody-lab-learnings.md](./kody-lab-learnings.md). Goal: a
+macOS build we use daily and demo in one video, then ask the maintainers whether
+they want any of it before opening PRs (CLA required per commit). Windows and
+Linux follow once macOS is solid.
 
 ## Findings that shape the design
 
