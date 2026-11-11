@@ -670,6 +670,23 @@ test('stream reuses a healthy SimDeck and only starts it in the background', asy
 	)
 })
 
+test('stream with a simulator id opens the viewer on that simulator', async () => {
+	const udid = '784FDD63-8E46-49AE-855A-FB0A7D860476'
+	const ctx = setup({ probeSimDeck: async () => 4310 })
+	assert.deepEqual(
+		await ctx.simulators.call('stream', { start: true, id: udid }, ctx.run),
+		{ url: `http://127.0.0.1:4310/?device=${udid}`, running: true },
+	)
+	assert.equal(
+		(ctx.authorized[0] as { command: string }).command,
+		`kody.simulator.stream start ${udid}`,
+	)
+	await assert.rejects(
+		ctx.simulators.call('stream', { id: 'not a udid' }, ctx.run),
+		/not a simulator UDID/,
+	)
+})
+
 test('a timed out tool reports timed_out to the audit log', async () => {
 	const ctx = setup({
 		exec: () => result('', { exitCode: null, timedOut: true }),

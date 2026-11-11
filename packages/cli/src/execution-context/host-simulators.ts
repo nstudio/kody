@@ -561,9 +561,22 @@ export class HostSimulators {
 		if (name === 'stream') {
 			const simdeck = requireSimDeck(tools)
 			const start = input.start === true
+			const id =
+				input.id === undefined || input.id === null
+					? null
+					: deviceIdArg('ios', input.id)
 			return {
-				command: `${action}${start ? ' start' : ''}`,
-				execute: (signal) => this.#stream(simdeck, signal, start),
+				command: `${action}${start ? ' start' : ''}${id ? ` ${id}` : ''}`,
+				execute: async (signal) => {
+					const stream = await this.#stream(simdeck, signal, start)
+					// SimDeck's viewer opens on the simulator named by `?device=`.
+					return id && id !== 'booted'
+						? {
+								...stream,
+								url: `${stream.url}/?device=${encodeURIComponent(id)}`,
+							}
+						: stream
+				},
 			}
 		}
 		const platform = platformArg(input.platform)
