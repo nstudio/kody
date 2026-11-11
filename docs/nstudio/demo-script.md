@@ -37,9 +37,9 @@ Do these in order; each takes a minute except the warm builds.
       from `~/Documents/github/DjDeveloperr/SimDeck` (branch
       `local/v0.2.0-xcode27`; the originals are kept as `*.orig` next to them).
       `curl -s 127.0.0.1:4310/api/health` returns `"ok":true`.
-- [ ] Known gap: on Xcode 27, SimDeck's iOS viewer is watch-only (touch and
-      buttons don't reach the simulator yet). Interact in Simulator.app; use the
-      viewer to show the stream.
+- [ ] Xcode 27 input needs NativeScript/SimDeck#91 (taps, Home and keys go
+      through `dtuhidd`). The local build on branch `local/v0.2.0-xcode27`
+      carries #87 and #91, so the viewer takes input as well as streaming.
 - [ ] The **Kody Review** iOS simulator exists
       (`xcrun simctl list | grep "Kody     Review"`). The runner always uses it,
       so your other simulators are never touched. Boot it before recording.
