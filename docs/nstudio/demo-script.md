@@ -187,24 +187,23 @@ the right, notes being typed while the simulator stays frontmost.
    > could start. Without a local run, nobody has verified it on a device."
 
 2. **Run on Android**. (Cut to `[kody-review] launch`.)
-3. On the emulator: **CSS Playground**, then paste the CSS (copy it on the Mac
-   first; the emulator shares the clipboard, and typing on camera is slow):
+3. On the emulator: **CSS Playground**. Tap **Apply** once with the default CSS:
+   a 200-wide blue label, centered.
+4. Add one line at the end of the CSS and tap **Apply**:
 
    ```css
-   width: 200;
-   font-size: 20;
-   color: white;
-   padding: 16;
-   background: #65adf1;
    transform: translateX(-50%);
    ```
 
-   Apply. The label moves left by half its own width (100), so its left edge
-   lands on the screen edge. On main it would move by 50.
+   The label slides left by exactly half its own width, so its right edge lands
+   on the screen's center line. (Rehearsal on a Pixel 9: x 277–802 px before,
+   15–540 px after, on a 1080 px screen. Per the PR, main drops the `%` and
+   moves it 50 dp, well short of the center.)
 
-4. **Screenshot** and **Inspect view tree** (Android uses accessibility for the
-   tree).
-5. Type a note and tick _Run on Android_.
+5. **Inspect view tree** (Android uses accessibility through uiautomator) and
+   point at `TextView: I'm a test label. @15,734 525x146`: 15 + 525 = 540, the
+   center. Then **Screenshot**, and add both to notes.
+6. Type a note and tick _Run on Android_.
 
 > "Same flow, other platform, same runner. Approving workflows covers PRs that
 > CI can run. This covers the ones it can't."
