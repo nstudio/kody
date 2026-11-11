@@ -73,7 +73,7 @@ class Lab {
 				throw new Error('Only the quick panel can call this.')
 			if (command === 'query') return this.results(input)
 			if (command === 'run') return this.runResult(input)
-			if (command === 'hide') return this.hideQuick()
+			if (command === 'hide') return this.hideQuick({ returnFocus: true })
 			throw new Error('Unknown quick panel command.')
 		})
 		globalShortcut.register(this.shortcuts.quick, () => void this.toggleQuick())
@@ -373,7 +373,7 @@ class Lab {
 	}
 
 	async toggleQuick() {
-		if (this.quick?.isVisible()) return this.hideQuick()
+		if (this.quick?.isVisible()) return this.hideQuick({ returnFocus: true })
 		this.quick ??= this.createQuick()
 		const area = native.screenUnderMouse(screen)
 		this.quick.setBounds({
@@ -385,13 +385,16 @@ class Lab {
 			await new Promise((resolve) =>
 				this.quick.webContents.once('did-finish-load', resolve),
 			)
+		this.quickReturnTo = native.frontmostApp()
 		this.quickShownAt = Date.now()
 		native.showWithoutActivating(this.quick)
 		this.quick.webContents.send('lab:quick-show', {})
 	}
 
-	hideQuick() {
-		if (this.quick?.isVisible()) this.quick.hide()
+	hideQuick({ returnFocus = false } = {}) {
+		if (!this.quick?.isVisible()) return
+		if (returnFocus) native.hideReturningFocus(this.quick, this.quickReturnTo)
+		else this.quick.hide()
 	}
 
 	// ---- Review panel and dashboard window ------------------------------------------------------------------------

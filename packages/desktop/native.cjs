@@ -60,6 +60,20 @@ function showWithoutActivating(browserWindow) {
 	return true
 }
 
+/**
+ * Hide a panel shown with showWithoutActivating and give the keyboard back to `app`, a frontmostApp() result taken
+ * before it was shown. While the panel is key this app is active; ordering the panel out deactivates it without
+ * activating anything else, so keystrokes go nowhere. Activation has to be handed over before the panel hides.
+ */
+function hideReturningFocus(browserWindow, app) {
+	const target =
+		ready() && app
+			? NSRunningApplication.runningApplicationWithProcessIdentifier(app.pid)
+			: null
+	if (target && !target.terminated) target.activateWithOptions(0)
+	browserWindow.hide()
+}
+
 /** The app the user is actually in. While a non-activating panel is key, NSApp.active reads true, so ask NSWorkspace. */
 function frontmostApp() {
 	if (!ready()) return null
@@ -84,6 +98,7 @@ module.exports = {
 	ready,
 	nsWindowFor,
 	showWithoutActivating,
+	hideReturningFocus,
 	frontmostApp,
 	screenUnderMouse,
 }
