@@ -44,14 +44,11 @@ and runs beside the published Kody.app.
 
 - `nativescript-github-dashboard`: the Kody package app
   (`@nstudio/nativescript-github-dashboard`) that Kody Lab's surfaces drive.
-- NativeScript/SimDeck: #87 and #91 were fixed as part of this work and merged.
-  A 0.2.1 release is pending.
+- NativeScript/SimDeck: #87 and #91 were fixed as part of this work, merged, and
+  released in SimDeck 0.2.1 (installed globally from npm).
 
-**Demo.** A 4-minute edited video. The final cut was `kody-lab-demo-v3.mp4`,
-saved in a session scratchpad.
-
-> **Note:** The scratchpad is temporary. Copy the video somewhere permanent
-> before it is cleaned up.
+**Demo.** A 4-minute edited video at `~/Movies/kody-lab-demo.mp4`. The raw takes
+and recording scripts were deleted.
 
 ## What Kody Lab adds
 
@@ -292,11 +289,13 @@ own, in this order of dependency.
 - **Template literals mangled generated JS.** Generating JS inside a TypeScript
   template literal turned `\n` into real newlines. Build those strings with
   `String.fromCharCode(10)` or a regex instead.
-- **The review hooks.** They inject the SimDeck inspector and lifecycle logs
-  into the PR's worktree as an uncommitted local change, installing missing
-  packages with `--no-save`. This lets any PR be inspected without touching its
-  diff. Worth showing maintainers as a pattern for "package code that prepares a
-  local workspace".
+- **The review hook.** The dashboard's `src/review-hook.ts` is written into the
+  PR's worktree as `apps/toolbox/src/kody-review.ts` and imported from the
+  entry's first line, as an uncommitted local change. It logs lifecycle events
+  and starts the SimDeck inspector on iOS; missing packages are installed with
+  `--no-save`. This lets any PR be inspected without touching its diff. Worth
+  showing maintainers as a pattern for "package code that prepares a local
+  workspace".
 
 ### Device and automation gotchas (for demos and tests)
 
