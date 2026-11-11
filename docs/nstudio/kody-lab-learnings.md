@@ -15,11 +15,26 @@ Related docs:
 - [demo-script.md](./demo-script.md): the video script. Several of its claims
   are now wrong; see [Open items](#open-items-before-any-pr).
 
+## Where everything lives
+
+Point Kody contributors here:
+
+| What                                                                                                           | Where                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Kody Lab (desktop features, `kody.simulator.*`, docs)                                                          | [github.com/nstudio/kody, branch `nstudio/native-surfaces`](https://github.com/nstudio/kody/tree/nstudio/native-surfaces), a fork of kody-hq/kody |
+| This doc, the plan, and the demo script                                                                        | `docs/nstudio/` on that branch                                                                                                                    |
+| NativeScript PR dashboard (the package app Kody Lab drives, including the review hook in `src/review-hook.ts`) | Kody package `@nstudio/nativescript-github-dashboard` in the @nstudio workspace, app at `nstudio.kody.run/nativescript-github-dashboard`          |
+| SimDeck fixes (Xcode 27 SimulatorKit path, dtuhidd input)                                                      | NativeScript/SimDeck #87 and #91, released in `simdeck@0.2.1` on npm                                                                              |
+| Demo video                                                                                                     | `~/Movies/kody-lab-demo.mp4` on the nStudio Mac (not published)                                                                                   |
+
 ## Status snapshot (2026-11-11)
 
 **Branch.** `nstudio/native-surfaces` in `kody-hq-kody`.
 
-- 25 local commits on top of `d2803138f`. Never pushed.
+- On top of upstream `d2803138f`, published at
+  [nstudio/kody `nstudio/native-surfaces`](https://github.com/nstudio/kody/tree/nstudio/native-surfaces).
+  It passes upstream's pre-push checks (format, lint, typecheck, Knip, and the
+  full unit-test suite).
 - Upstream `main` is 13 commits ahead. None of those commits touch our files, so
   a rebase should be clean.
 
